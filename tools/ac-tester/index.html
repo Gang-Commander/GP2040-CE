@@ -19,11 +19,11 @@
 	.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
 	button { background: #20324a; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
 	button:hover { border-color: var(--accent); }
-	button.primary { background: var(--accent); color: #04121f; border-color: var(--accent); font-weight: 600; }
-	button:disabled { opacity: .4; cursor: default; }
+	button.primary, button.on { background: var(--accent); color: #04121f; border-color: var(--accent); font-weight: 600; }
 	.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 	.muted { color: var(--muted); font-size: 12px; }
 	input[type=range] { flex: 1; }
+	input[type=number] { width: 56px; background: #0e1622; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
 	.status { font-size: 12px; color: var(--muted); }
 	.status b { color: var(--text); }
 	.live { font-size: 64px; text-align: center; line-height: 1; height: 72px; }
@@ -31,26 +31,36 @@
 	table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 	th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
 	th { color: var(--muted); font-weight: 500; font-size: 12px; position: sticky; top: 0; background: var(--panel); }
+	td.l, th.l { text-align: left; }
 	td.dir { text-align: left; font-size: 18px; }
-	.tablewrap { max-height: 60vh; overflow: auto; }
+	.tablewrap { max-height: 45vh; overflow: auto; }
 	.bad { color: var(--bad); } .warn { color: var(--warn); } .ok { color: var(--ok); }
 	.tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11px; border: 1px solid currentColor; margin-left: 4px; }
 	.stat { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
 	.stat div:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
-	.hist { display: grid; grid-template-columns: repeat(17, 1fr); gap: 3px; align-items: end; height: 110px; margin-top: 8px; position: relative; }
-	.hist .bar { background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; position: relative; }
+	.hist { display: grid; grid-template-columns: repeat(17, 1fr); gap: 3px; align-items: end; height: 110px; margin-top: 8px; }
+	.hist .bar { border-radius: 2px 2px 0 0; min-height: 1px; }
 	.hist .bar.thr { outline: 2px solid var(--warn); outline-offset: 1px; }
 	.histlabels { display: grid; grid-template-columns: repeat(17, 1fr); gap: 3px; font-size: 10px; color: var(--muted); text-align: center; }
 	.calib { border: 1px dashed var(--warn); border-radius: 8px; padding: 10px; margin-top: 8px; }
 	.big { font-size: 20px; font-weight: 700; }
 	details summary { cursor: pointer; color: var(--muted); }
+	.numpad { display: grid; grid-template-columns: repeat(3, 64px); gap: 6px; margin-top: 8px; }
+	.numpad label { font-size: 12px; color: var(--muted); display: block; }
+	.modes { display: flex; flex-wrap: wrap; gap: 6px; }
+	.cmp { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 6px 10px; align-items: center; }
+	.cmp .h { color: var(--muted); font-size: 12px; }
+	.meter { height: 10px; background: #0e1622; border-radius: 5px; overflow: hidden; position: relative; }
+	.meter > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+	.meter > b { position: absolute; inset: 0 auto 0 0; background: var(--ok); opacity: .45; }
+	.seq { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; }
 </style>
 </head>
 <body>
 <header>
 	<div>
 		<h1>AC 入力履歴テスター</h1>
-		<div class="muted">方向入力ごとの持続時間と、60fpsでの理論上の読み落とし率を記録します。</div>
+		<div class="muted">方向入力ごとの持続時間と、スト6のコマンド成功率（60fpsの読み取りを再現）を記録します。</div>
 	</div>
 	<div class="row">
 		<button id="btnClear">クリア</button>
@@ -62,17 +72,15 @@
 	<section>
 		<div class="panel">
 			<h2>接続</h2>
-			<div class="row">
-				<button class="primary" id="btnHid">WebHIDで接続（1ms精度）</button>
-			</div>
+			<div class="row"><button class="primary" id="btnHid">WebHIDで接続（1ms精度）</button></div>
 			<div class="muted">WebHIDはPS3 / DInput / Switch などHIDモードで使えます（XInputモードは不可）。接続後にキャリブレーションが必要です。</div>
 			<div class="calib" id="calibBox" hidden>
 				<div id="calibText" class="big"></div>
-				<div class="muted" id="calibHint">方向を押したまま「記録」を押してください（マウス・キーボードで）。</div>
+				<div class="muted">方向（またはボタン）を押したまま「記録」をマウスで押してください。</div>
 				<div class="row" style="margin-top:8px"><button class="primary" id="btnCalib">記録</button><button id="btnCalibCancel">中止</button></div>
 			</div>
 			<hr style="border-color:var(--line)">
-			<div class="muted">Gamepad APIは、どのモードでもコントローラーを押せば自動で使われます。Chromeの内部ポーリングが約4msのため、持続時間は±4ms程度の誤差を含みます。</div>
+			<div class="muted">Gamepad APIは、どのモードでもコントローラーを押せば自動で使われます。Chromeの内部ポーリングが約4msのため、持続時間は±4ms程度の誤差を含みます。コントローラーが無いときはキーボードのWASD（方向）とJ / K / L（攻撃）で試せます。</div>
 			<div class="status" style="margin-top:8px">入力元: <b id="srcName">未接続</b></div>
 		</div>
 
@@ -85,8 +93,14 @@
 			<h2>ACの設定（プレビュー用）</h2>
 			<div class="row"><span style="width:96px">しきい値</span><input type="range" id="thr" min="1" max="16" value="9"><b id="thrVal" style="width:44px;text-align:right">9ms</b></div>
 			<div class="row"><span style="width:96px">保持時間</span><input type="range" id="hold" min="10" max="50" value="18"><b id="holdVal" style="width:44px;text-align:right">18ms</b></div>
-			<div class="row"><label><input type="checkbox" id="deviceAc"> 本体のACがONの状態で計測している</label></div>
-			<div class="muted">「AC適用後」列は、ここで選んだしきい値で本体のACを使った場合の予測です。ACをOFFにして計測し、しきい値を決める使い方を想定しています。</div>
+			<details id="perDirBox">
+				<summary>詳細設定</summary>
+				<div class="row" style="margin-top:6px"><label><input type="checkbox" id="perDir"> 方向ごとにしきい値を設定する</label></div>
+				<div class="muted">ONにした時点の値は上のしきい値と同じです。本体のWeb設定画面の「詳細設定」と同じ値を入れると、本体と同じ判定で予測できます。</div>
+				<div class="numpad" id="numpad"></div>
+			</details>
+			<div class="row" style="margin-top:8px"><label><input type="checkbox" id="deviceAc"> 本体のACがONの状態で計測している</label></div>
+			<div class="muted">「AC適用後」は、ここの設定で本体のACを使った場合の予測です。ACをOFFにして計測し、しきい値を決める使い方を想定しています。本体のACがONなら、計測値そのものがAC適用後なので予測は表示しません。</div>
 		</div>
 
 		<div class="panel">
@@ -101,64 +115,104 @@
 
 	<section>
 		<div class="panel">
+			<h2>コマンド練習（スト6）</h2>
+			<div class="modes" id="modes"></div>
+			<div class="muted" id="modeHelp" style="margin-top:6px"></div>
+			<div class="row" style="margin-top:8px">
+				<span class="muted">受付</span><input type="number" id="window" min="3" max="60"><span class="muted">フレーム（仮の値・変更可）</span>
+			</div>
+			<div class="cmp" id="cmp" style="margin-top:10px"></div>
+			<div class="muted" style="margin-top:6px">成功率は、ゲームの読み取りタイミング（16.7ms周期）を32通りずらして判定した平均です。青＝計測値、緑＝AC適用後の予測。</div>
+			<div class="tablewrap" style="margin-top:10px">
+				<table>
+					<thead><tr><th>#</th><th class="l">側</th><th class="l">実際の入力</th><th>所要</th><th>成功率</th><th>AC適用後</th><th class="l">失敗したときの読まれ方</th></tr></thead>
+					<tbody id="attempts"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<div class="panel">
 			<h2>入力履歴（新しい順）</h2>
 			<div class="tablewrap">
 				<table>
-					<thead><tr><th>#</th><th style="text-align:left">入力</th><th>フレーム</th><th>持続時間</th><th>読み落とし率</th><th>AC適用後</th><th style="text-align:left">メモ</th></tr></thead>
+					<thead><tr><th>#</th><th class="l">入力</th><th>フレーム</th><th>持続時間</th><th>読み落とし率</th><th>AC適用後</th><th class="l">メモ</th></tr></thead>
 					<tbody id="log"></tbody>
 				</table>
 			</div>
 		</div>
+
 		<details class="panel">
-			<summary>読み落とし率の計算方法</summary>
-			<p class="muted">60fpsのゲームは約16.7msごとに入力を読みます。持続時間 d ms の入力が読み取りの瞬間に重ならない確率は、読み取りのタイミングがランダムなら max(0, 1 − d / 16.7) です（例: 6ms → 64%）。実際のゲームはUSBポーリング（1ms）分さらに不利になります。</p>
-			<p class="muted">ACは「しきい値以上・保持時間未満」の方向入力を保持時間まで延長するので、その入力の読み落とし率は0%になります。しきい値未満の入力は変化しません。</p>
+			<summary>判定の仕組みと前提</summary>
+			<p class="muted"><b>読み落とし率</b>: 持続時間 d ms の入力が16.7msごとの読み取りに一度も重ならない確率で、max(0, 1 − d / 16.7) です（例: 6ms → 64%）。</p>
+			<p class="muted"><b>コマンド成功率</b>: 攻撃ボタンを押した時刻を含むフレームから、受付フレーム数だけさかのぼった読み取り結果に、コマンドが順番どおり含まれるかを判定します。読み取りの位相を32通りずらした平均です。攻撃ボタンを押さなかった場合は、最後の方向を押してから20ms後に押したとみなします。</p>
+			<p class="muted"><b>スト6の判定ルール（このツールの前提）</b>: 昇竜は「前を含む方向 → 下を含む方向 → 前を含む方向」が順に並べば成立（623 / 323 / 636 / 626 / 639）。333のように同じ方向が続くだけでは不成立。波動は 2 → 3 → 6 が順に必要（26は不成立）。竜巻は 2 → 1 → 4。真空波動は波動2回。波動の判定で昇竜も成立している場合は、昇竜に化けたとして失敗に数えます。受付フレーム数は波動系11Fが公開されている調査値で、他は仮の値です。</p>
+			<p class="muted"><b>左右</b>: 1P側（右向き）と2P側（左向き）は、入力がどちら向きのコマンドとして成立したかで自動で振り分けます。</p>
 		</details>
 	</section>
 </main>
 
 <script>
 'use strict';
-// ---- Direction model --------------------------------------------------------
-// bits: 1=UP 2=DOWN 4=LEFT 8=RIGHT (same as GP2040-CE)
+// ============================================================================
+// Direction model — bits: 1=UP 2=DOWN 4=LEFT 8=RIGHT (same as GP2040-CE)
+// ============================================================================
 const U = 1, D = 2, L = 4, R = 8;
 const ARROW = { 0: '・', [U]: '↑', [D]: '↓', [L]: '←', [R]: '→', [U|L]: '↖', [U|R]: '↗', [D|L]: '↙', [D|R]: '↘' };
 const NUMPAD = { 0: '5', [U]: '8', [D]: '2', [L]: '4', [R]: '6', [U|L]: '7', [U|R]: '9', [D|L]: '1', [D|R]: '3' };
 const FRAME_MS = 1000 / 60;
 const isDiag = (s) => (s & (U|D)) && (s & (L|R));
 const isCard = (s) => s === U || s === D || s === L || s === R;
+const mirror = (s) => (s & (U|D)) | ((s & L) ? R : 0) | ((s & R) ? L : 0);
 
-// SOCD-clean what we read (the device normally already did this).
 function socdNeutral(s) {
 	if ((s & (L|R)) === (L|R)) s &= ~(L|R);
 	if ((s & (U|D)) === (U|D)) s &= ~(U|D);
 	return s;
 }
 
-// ---- Recording --------------------------------------------------------------
-const segs = [];          // closed segments {state, start, end, dur}
+// ============================================================================
+// Recording: raw direction changes + attack button presses
+// ============================================================================
+const segs = [];               // closed direction segments {state, start, end, dur}
 let cur = { state: 0, start: performance.now() };
+const changes = [{ t: cur.start, s: 0 }]; // raw timeline of direction changes
 let srcName = '';
+let attemptStart = null;
+let armed = true;
+let lastAttemptEnd = -Infinity;
 
 function feed(state, t) {
 	state = socdNeutral(state);
 	if (state === cur.state) return;
-	const seg = { state: cur.state, start: cur.start, end: t, dur: t - cur.start };
-	segs.push(seg);
-	if (segs.length > 2000) segs.shift();
+	// No-button fallback: arm only when a motion starts from neutral, and not
+	// for the releases that follow an attack press.
+	if (cur.state === 0) armed = true;
+	if (attemptStart === null && armed && cur.state === 0 && state !== 0) attemptStart = t;
+	segs.push({ state: cur.state, start: cur.start, end: t, dur: t - cur.start });
+	if (segs.length > 3000) segs.shift();
+	changes.push({ t, s: state });
+	if (changes.length > 6000) changes.splice(0, 1000);
 	cur = { state, start: t };
 	updateLive();
 	scheduleRender();
+}
+
+let buttonDown = false;
+function feedButton(pressed, t) {
+	if (pressed && !buttonDown) onAttackPressed(t);
+	buttonDown = pressed;
 }
 
 function updateLive() {
 	document.getElementById('live').firstChild.nodeValue = ARROW[cur.state] ?? '?';
 	document.getElementById('liveSub').textContent = cur.state ? `${NUMPAD[cur.state]} 入力中` : 'ニュートラル';
 }
+function setSource(name) { srcName = name; document.getElementById('srcName').textContent = name; }
 
-// ---- Gamepad API source -----------------------------------------------------
-// Works in every input mode (incl. XInput). Chrome polls the OS at ~250 Hz.
-let lastPadStamp = new Map();
+// ============================================================================
+// Source 1: Gamepad API (any mode incl. XInput; ~4 ms browser polling)
+// ============================================================================
+const lastPadStamp = new Map();
 function decodeGamepad(gp) {
 	let s = 0;
 	const b = gp.buttons;
@@ -168,42 +222,36 @@ function decodeGamepad(gp) {
 		if (pressed(14)) s |= L; if (pressed(15)) s |= R;
 	}
 	const a = gp.axes;
-	// Left stick (GP2040 "Left Analog" D-pad mode)
-	if (a.length >= 2) {
+	if (a.length >= 2) { // Left Analog D-pad mode
 		if (a[1] < -0.5) s |= U; if (a[1] > 0.5) s |= D;
 		if (a[0] < -0.5) s |= L; if (a[0] > 0.5) s |= R;
 	}
-	// Non-standard hat axis (DInput on some browsers, axes[9]): -1..1 in 8 steps, >1 = neutral
-	if (a.length > 9 && a[9] >= -1.01 && a[9] <= 1.01) {
-		const idx = Math.round((a[9] + 1) * 3.5);
-		s |= [U, U|R, R, D|R, D, D|L, L, U|L][idx] ?? 0;
+	if (a.length > 9 && a[9] >= -1.01 && a[9] <= 1.01) { // non-standard hat axis
+		s |= [U, U|R, R, D|R, D, D|L, L, U|L][Math.round((a[9] + 1) * 3.5)] ?? 0;
 	}
-	return s;
+	let btn = false;
+	for (let i = 0; i < Math.min(8, b.length); i++) if (pressed(i)) btn = true; // face + shoulder
+	return { s, btn };
 }
-
-// Poll as fast as timers allow; gp.timestamp gives the browser's own sample time,
-// so the measured durations do not depend on how fast this loop runs.
-setInterval(() => { if (!hid) pollOnce(); }, 1);
-function pollOnce() {
+// gp.timestamp is the browser's own sample time, so durations don't depend on this loop.
+setInterval(() => {
+	if (hid) return;
 	const pads = navigator.getGamepads ? navigator.getGamepads() : [];
 	for (const gp of pads) {
-		if (!gp) continue;
-		if (lastPadStamp.get(gp.index) === gp.timestamp) continue;
+		if (!gp || lastPadStamp.get(gp.index) === gp.timestamp) continue;
 		lastPadStamp.set(gp.index, gp.timestamp);
-		if (!srcName) setSource(`Gamepad API: ${gp.id}`);
-		feed(decodeGamepad(gp), gp.timestamp || performance.now());
+		if (!srcName || srcName.startsWith('キーボード')) setSource(`Gamepad API: ${gp.id}`);
+		const t = gp.timestamp || performance.now();
+		const { s, btn } = decodeGamepad(gp);
+		feed(s, t);
+		feedButton(btn, t);
 	}
-}
+}, 1);
 
-function setSource(name) { srcName = name; document.getElementById('srcName').textContent = name; }
-
-// ---- WebHID source ----------------------------------------------------------
-// 1 ms resolution from the raw HID reports. The report layout differs per
-// input mode, so the user calibrates once: neutral, then each direction.
-let hid = null;
-let calib = null; // { reportId, neutral: Uint8Array, dirs: {U:..,...}, decode(bytes) }
-let lastReport = null; // { reportId, bytes }
-
+// ============================================================================
+// Source 2: WebHID (1 ms) — calibrated once per input mode
+// ============================================================================
+let hid = null, calib = null, lastReport = null;
 document.getElementById('btnHid').onclick = async () => {
 	if (!('hid' in navigator)) { alert('このブラウザはWebHIDに対応していません。PCのChrome / Edgeを使ってください。'); return; }
 	try {
@@ -212,124 +260,364 @@ document.getElementById('btnHid').onclick = async () => {
 		if (!dev.opened) await dev.open();
 		hid = dev;
 		setSource(`WebHID: ${dev.productName}（要キャリブレーション）`);
-		dev.addEventListener('inputreport', onReport);
+		dev.addEventListener('inputreport', (e) => {
+			const bytes = new Uint8Array(e.data.buffer.slice(e.data.byteOffset, e.data.byteOffset + e.data.byteLength));
+			lastReport = { reportId: e.reportId, bytes };
+			if (calib && e.reportId === calib.reportId) {
+				feed(calib.decode(bytes), e.timeStamp);
+				if (calib.button) feedButton(calib.button(bytes), e.timeStamp);
+			}
+		});
 		startCalibration();
 	} catch (e) { alert('接続できませんでした: ' + e.message); }
 };
-
-function onReport(e) {
-	const bytes = new Uint8Array(e.data.buffer.slice(e.data.byteOffset, e.data.byteOffset + e.data.byteLength));
-	lastReport = { reportId: e.reportId, bytes };
-	if (calib && e.reportId === calib.reportId) feed(calib.decode(bytes), e.timeStamp);
-}
-
 const CALIB_STEPS = [
 	{ key: 'N', label: 'ニュートラル（何も押さない）' },
-	{ key: 'U', label: '↑ を押したまま' },
-	{ key: 'D', label: '↓ を押したまま' },
-	{ key: 'L', label: '← を押したまま' },
-	{ key: 'R', label: '→ を押したまま' },
+	{ key: 'U', label: '↑ を押したまま' }, { key: 'D', label: '↓ を押したまま' },
+	{ key: 'L', label: '← を押したまま' }, { key: 'R', label: '→ を押したまま' },
+	{ key: 'B', label: '攻撃ボタン（どれか1つ）を押したまま' },
 ];
 let calibStep = 0, calibData = {};
 function startCalibration() {
 	calib = null; calibStep = 0; calibData = {};
 	document.getElementById('calibBox').hidden = false;
-	showCalibStep();
-}
-function showCalibStep() {
-	document.getElementById('calibText').textContent = `${calibStep + 1}/5: ${CALIB_STEPS[calibStep].label}`;
+	document.getElementById('calibText').textContent = `1/${CALIB_STEPS.length}: ${CALIB_STEPS[0].label}`;
 }
 document.getElementById('btnCalibCancel').onclick = () => { document.getElementById('calibBox').hidden = true; };
 document.getElementById('btnCalib').onclick = () => {
 	if (!lastReport) { alert('まだレポートが届いていません。ボタンを一度押してから試してください。'); return; }
 	calibData[CALIB_STEPS[calibStep].key] = { reportId: lastReport.reportId, bytes: lastReport.bytes.slice() };
 	calibStep++;
-	if (calibStep < CALIB_STEPS.length) { showCalibStep(); return; }
+	if (calibStep < CALIB_STEPS.length) {
+		document.getElementById('calibText').textContent = `${calibStep + 1}/${CALIB_STEPS.length}: ${CALIB_STEPS[calibStep].label}`;
+		return;
+	}
 	try {
 		calib = buildDecoder(calibData);
 		document.getElementById('calibBox').hidden = true;
 		setSource(`WebHID: ${hid.productName}（${calib.kind}）`);
-	} catch (e) {
-		alert('キャリブレーションに失敗しました: ' + e.message);
-		startCalibration();
-	}
+	} catch (e) { alert('キャリブレーションに失敗しました: ' + e.message); startCalibration(); }
 };
-
-// Figure out how directions are encoded: hat switch, independent bits, or analog axes.
+// Directions: hat switch, independent bits, or analog axes. Button: one bit.
 function buildDecoder(c) {
 	const n = c.N.bytes, reportId = c.N.reportId;
-	const dirs = { U, D, L, R };
-	const diffs = {};
-	for (const k of ['U', 'D', 'L', 'R']) {
+	const dirs = { U, D, L, R }, diffs = {};
+	for (const k of ['U', 'D', 'L', 'R', 'B']) {
 		if (c[k].reportId !== reportId) throw new Error('レポートIDが一致しません');
 		const d = [];
 		for (let i = 0; i < n.length; i++) if (c[k].bytes[i] !== n[i]) d.push(i);
 		if (!d.length) throw new Error(`${k} の入力が検出できません`);
 		diffs[k] = d;
 	}
-	// 1) Hat switch: all four change the same byte, low nibble U=0 R=2 D=4 L=6
+	const bi = diffs.B[0], bmask = (c.B.bytes[bi] ^ n[bi]) & -(c.B.bytes[bi] ^ n[bi]), bon = c.B.bytes[bi] & bmask;
+	const button = (b) => (b[bi] & bmask) === bon;
 	const hb = diffs.U[0];
 	if (['D', 'L', 'R'].every((k) => diffs[k].includes(hb))) {
 		const nib = (k) => c[k].bytes[hb] & 0x0f;
 		if (nib('U') === 0 && nib('R') === 2 && nib('D') === 4 && nib('L') === 6) {
 			const map = [U, U|R, R, D|R, D, D|L, L, U|L];
-			return { reportId, kind: 'ハットスイッチ', decode: (b) => map[b[hb] & 0x0f] ?? 0 };
+			return { reportId, kind: 'ハットスイッチ', decode: (b) => map[b[hb] & 0x0f] ?? 0, button };
 		}
 	}
-	// 2) Analog axes (Left/Right Analog D-pad mode): neutral ~0x80, pressed far away
 	const axisLike = (k) => diffs[k].length <= 2 && diffs[k].some((i) => Math.abs(n[i] - 0x80) <= 0x10 && Math.abs(c[k].bytes[i] - n[i]) > 0x40);
 	if (['U', 'D', 'L', 'R'].every(axisLike)) {
 		const probes = ['U', 'D', 'L', 'R'].map((k) => {
 			const i = diffs[k].find((j) => Math.abs(c[k].bytes[j] - n[j]) > 0x40);
 			return { bit: dirs[k], i, sign: Math.sign(c[k].bytes[i] - n[i]) };
 		});
-		return { reportId, kind: 'アナログ軸', decode: (b) => probes.reduce((s, p) => (Math.sign(b[p.i] - n[p.i]) === p.sign && Math.abs(b[p.i] - n[p.i]) > 0x40 ? s | p.bit : s), 0) };
+		return { reportId, kind: 'アナログ軸', button, decode: (b) => probes.reduce((s, p) => (Math.sign(b[p.i] - n[p.i]) === p.sign && Math.abs(b[p.i] - n[p.i]) > 0x40 ? s | p.bit : s), 0) };
 	}
-	// 3) Independent bits
 	const probes = ['U', 'D', 'L', 'R'].map((k) => {
-		const i = diffs[k][0];
-		const mask = c[k].bytes[i] ^ n[i];
-		return { bit: dirs[k], i, mask: mask & -mask, on: c[k].bytes[i] & (mask & -mask) };
+		const i = diffs[k][0], x = c[k].bytes[i] ^ n[i], mask = x & -x;
+		return { bit: dirs[k], i, mask, on: c[k].bytes[i] & mask };
 	});
-	return { reportId, kind: 'ビット', decode: (b) => probes.reduce((s, p) => ((b[p.i] & p.mask) === p.on ? s | p.bit : s), 0) };
+	return { reportId, kind: 'ビット', button, decode: (b) => probes.reduce((s, p) => ((b[p.i] & p.mask) === p.on ? s | p.bit : s), 0) };
 }
 
-// ---- Analysis & rendering ---------------------------------------------------
+// ============================================================================
+// Accurate Command engine — JS port of src/accuratecommand.cpp (times in ms)
+// ============================================================================
+class ACEngine {
+	constructor(cfg) { this.cfg = cfg; this.q = []; this.dispStart = 0; this.lastRaw = 0; this.beforeNeutral = 0; }
+	thr(state) { return this.cfg.perState?.[state] || this.cfg.thr; }
+	insertion(prev, next) {
+		const c = this.cfg;
+		if (c.hado) {
+			if (prev === D && (next === R || next === L)) return D | next;
+			if (next === D && (prev === R || prev === L)) return D | prev;
+		}
+		if (c.sho && ((prev === R && next === (D|R)) || (prev === L && next === (D|L)))) return D;
+		return 0;
+	}
+	displayEnd(seg) {
+		const c = this.cfg;
+		if (seg.syn) return this.dispStart + c.hold;
+		const dur = seg.end - seg.start, lagging = this.dispStart > seg.start;
+		let minShow;
+		if (seg.s !== 0 && dur < this.thr(seg.s)) minShow = lagging ? 0 : dur;
+		else if (c.ac && seg.s !== 0) minShow = c.hold;
+		else minShow = Math.min(dur, c.hold);
+		return Math.max(this.dispStart + minShow, seg.end);
+	}
+	process(s, now) {
+		if (!this.q.length) { this.q.push({ s, start: now, closed: false }); this.dispStart = now; this.lastRaw = s; return s; }
+		if (s !== this.lastRaw) {
+			const prev = this.lastRaw, live = this.q[this.q.length - 1];
+			live.closed = true; live.end = now;
+			const dur = now - live.start;
+			const from = (prev === 0 && dur < this.cfg.thr) ? this.beforeNeutral : prev;
+			const ins = this.insertion(from, s);
+			if (this.q.length + (ins ? 2 : 1) > 8) { this.q = []; this.dispStart = now; }
+			if (ins) this.q.push({ s: ins, syn: true, closed: true });
+			this.q.push({ s, start: now, closed: false });
+			if (s === 0) this.beforeNeutral = prev;
+			this.lastRaw = s;
+		}
+		for (;;) {
+			const f = this.q[0];
+			if (!f.closed) break;
+			const end = this.displayEnd(f);
+			if (now < end) break;
+			this.q.shift();
+			this.dispStart = end;
+			const n = this.q[0];
+			if (!n.syn && this.dispStart - n.start > this.cfg.hold * 2) { this.q = [this.q[this.q.length - 1]]; this.dispStart = now; break; }
+		}
+		return this.q[0].s;
+	}
+}
+// Run a raw change list through the engine and return the output change list.
+function applyAC(list, cfg) {
+	if (!list.length) return list;
+	const eng = new ACEngine(cfg), out = [];
+	let i = 0;
+	const t0 = list[0].t, t1 = list[list.length - 1].t + 200;
+	for (let t = t0; t <= t1; t += 0.25) {
+		while (i + 1 < list.length && list[i + 1].t <= t) i++;
+		const o = eng.process(list[i].s, t);
+		if (!out.length || out[out.length - 1].s !== o) out.push({ t, s: o });
+	}
+	return out;
+}
+
+// ============================================================================
+// SF6 command judging
+// ============================================================================
+// Element predicates are written for a character facing RIGHT (1P side);
+// the 2P side is judged on the mirrored input.
+const hasF = (s) => (s & R) && !(s & L);
+const hasDn = (s) => (s & D) !== 0;
+const is = (x) => (s) => s === x;
+const MOTION = {
+	dp:  [hasF, hasDn, hasF],          // 623 family: 623 / 323 / 636 / 626 / 639
+	qcf: [is(D), is(D|R), is(R)],      // 236 (26 does not count)
+	qcb: [is(D), is(D|L), is(L)],      // 214
+	sa:  [is(D), is(D|R), is(R), is(D), is(D|R), is(R)], // 236236
+};
+// Ordered subsequence match on run-length-compressed frames: each element needs its own run.
+function matches(runs, preds) {
+	let k = 0;
+	for (const s of runs) { if (k < preds.length && preds[k](s)) k++; }
+	return k === preds.length;
+}
+const MODES = {
+	hado:   { label: '波動（236）', motion: 'qcf', win: 11, endsForward: true, help: '2 → 3 → 6 + 攻撃。昇竜に化けたら失敗として数えます。' },
+	sho:    { label: '昇竜（623）', motion: 'dp',  win: 11, endsForward: true, help: '6 → 2 → 3 + 攻撃。' },
+	easySho:{ label: '簡易昇竜（323 / 636）', motion: 'dp', win: 11, endsForward: true, help: '323 または 636 + 攻撃。判定は昇竜と同じで、使った形を表示します。' },
+	sa:     { label: '真空波動（236236）', motion: 'sa', win: 20, endsForward: true, help: '236236 + 攻撃。受付フレームは仮の値です。' },
+	tatsu:  { label: '竜巻（214）', motion: 'qcb', win: 11, endsForward: false, help: '2 → 1 → 4 + 攻撃。' },
+};
+let mode = 'hado';
+const windowEl = document.getElementById('window');
+const winByMode = Object.fromEntries(Object.entries(MODES).map(([k, m]) => [k, m.win]));
+
+// Frames the game sees for one phase: state at each 60 fps sample.
+function sampleRuns(list, tStart, tButton, phase, win) {
+	// Button is read on the first sample at or after it was pressed.
+	const k0 = Math.ceil((tButton - phase) / FRAME_MS);
+	const frames = [];
+	let i = 0;
+	for (let k = k0 - win + 1; k <= k0; k++) {
+		const t = phase + k * FRAME_MS - 1; // −1 ms: the host has the report from the previous USB poll
+		while (i + 1 < list.length && list[i + 1].t <= t) i++;
+		frames.push(list[i].t <= t ? list[i].s : 0);
+	}
+	const runs = [];
+	for (const s of frames) if (!runs.length || runs[runs.length - 1] !== s) runs.push(s);
+	return runs;
+}
+function judgeSide(list, attempt, m, win, side) {
+	const L2 = side === 2 ? list.map((c) => ({ t: c.t, s: mirror(c.s) })) : list;
+	const N = 32;
+	let ok = 0, failRuns = null;
+	for (let p = 0; p < N; p++) {
+		const phase = (p / N) * FRAME_MS;
+		const runs = sampleRuns(L2, attempt.start, attempt.button, phase, win);
+		let good = matches(runs, MOTION[m.motion]);
+		if (good && m.motion === 'qcf' && matches(runs, MOTION.dp)) good = false; // turned into a DP
+		if (good) ok++; else if (!failRuns) failRuns = runs;
+	}
+	return { rate: ok / N, failRuns };
+}
+function judge(list, attempt) {
+	const m = MODES[attempt.mode];
+	const win = winByMode[attempt.mode];
+	const a = judgeSide(list, attempt, m, win, 1), b = judgeSide(list, attempt, m, win, 2);
+	let side;
+	if (a.rate !== b.rate) side = a.rate > b.rate ? 1 : 2;
+	else {
+		// Neither (or both) side succeeded: decide by the last horizontal direction.
+		const lastH = [...attempt.raw].reverse().find((c) => c.s & (L|R));
+		const right = lastH ? (lastH.s & R) !== 0 : true;
+		side = (right === m.endsForward) ? 1 : 2;
+	}
+	return { side, ...(side === 1 ? a : b) };
+}
+
+// Attempts: a run of direction activity ended by an attack button
+// (or, without a button, by 250 ms of neutral).
+const attempts = [];
+function onAttackPressed(t) {
+	// Look back at most 1 s, and never into the previous attempt.
+	const raw = changesSince(Math.max(t - 1000, lastAttemptEnd + 1)).filter((c) => c.t <= t);
+	if (!raw.some((c) => c.s !== 0)) return;
+	finishAttempt(raw, t);
+}
+setInterval(() => {
+	// no-button fallback: neutral for 250 ms after some directions
+	const now = performance.now();
+	if (cur.state !== 0 || now - cur.start < 250) return;
+	if (attemptStart === null) return;
+	const raw = changesSince(Math.max(attemptStart - 50, lastAttemptEnd + 1)).filter((c) => c.t <= cur.start);
+	const last = [...raw].reverse().find((c) => c.s !== 0);
+	if (last) finishAttempt(raw, last.t + 20, true);
+	attemptStart = null;
+}, 50);
+function changesSince(t) {
+	let i = changes.length - 1;
+	while (i > 0 && changes[i].t > t) i--;
+	return changes.slice(i).map((c, j) => (j === 0 ? { t, s: c.s } : c));
+}
+function finishAttempt(raw, buttonT, implied = false) {
+	// The motion starts after the last neutral before the button (or at the
+	// first direction if there is none, e.g. 323 from a held crouch).
+	let lastNeutral = -1;
+	for (let i = 0; i < raw.length; i++) if (raw[i].s === 0 && raw.slice(i + 1).some((c) => c.s !== 0)) lastNeutral = i;
+	const firstDir = lastNeutral >= 0 ? lastNeutral + 1 : raw.findIndex((c) => c.s !== 0);
+	const start = raw[Math.max(0, firstDir)].t;
+	attempts.push({ mode, raw, start, button: buttonT, implied });
+	if (attempts.length > 500) attempts.shift();
+	attemptStart = null;
+	lastAttemptEnd = buttonT;
+	armed = false; // wait for neutral before the next fallback attempt
+	scheduleRender();
+}
+
+// ============================================================================
+// Settings UI
+// ============================================================================
 const thrEl = document.getElementById('thr'), holdEl = document.getElementById('hold');
-const deviceAcEl = document.getElementById('deviceAc');
+const deviceAcEl = document.getElementById('deviceAc'), perDirEl = document.getElementById('perDir');
 const thr = () => +thrEl.value, hold = () => +holdEl.value;
-thrEl.oninput = () => { document.getElementById('thrVal').textContent = thr() + 'ms'; scheduleRender(); };
+const NUMPAD_ORDER = [U|L, U, U|R, L, 0, R, D|L, D, D|R];
+const perState = {};
+document.getElementById('numpad').innerHTML = NUMPAD_ORDER.map((s) => s === 0
+	? '<div class="muted" style="text-align:center;align-self:center">5</div>'
+	: `<div><label>${ARROW[s]} ${NUMPAD[s]}</label><input type="number" min="1" max="16" data-s="${s}" disabled></div>`).join('');
+const dirInputs = [...document.querySelectorAll('#numpad input')];
+function syncPerDir() {
+	dirInputs.forEach((el) => { el.disabled = !perDirEl.checked; if (!perDirEl.checked) el.value = thr(); });
+	readPerDir();
+}
+function readPerDir() {
+	for (const el of dirInputs) perState[+el.dataset.s] = perDirEl.checked ? Math.min(16, Math.max(1, +el.value || thr())) : 0;
+}
+perDirEl.onchange = syncPerDir;
+dirInputs.forEach((el) => (el.oninput = () => { readPerDir(); scheduleRender(); }));
+thrEl.oninput = () => { document.getElementById('thrVal').textContent = thr() + 'ms'; if (!perDirEl.checked) syncPerDir(); scheduleRender(); };
 holdEl.oninput = () => { document.getElementById('holdVal').textContent = hold() + 'ms'; scheduleRender(); };
 deviceAcEl.onchange = scheduleRender;
+syncPerDir();
+const thrFor = (s) => perState[s] || thr();
+const acCfg = () => ({ ac: true, thr: thr(), hold: hold(), perState: { ...perState }, hado: false, sho: false });
 
+function renderModes() {
+	document.getElementById('modes').innerHTML = Object.entries(MODES).map(([k, m]) =>
+		`<button data-mode="${k}" class="${k === mode ? 'on' : ''}">${m.label}</button>`).join('');
+	document.querySelectorAll('#modes button').forEach((b) => (b.onclick = () => { mode = b.dataset.mode; renderModes(); scheduleRender(); }));
+	document.getElementById('modeHelp').textContent = MODES[mode].help;
+	windowEl.value = winByMode[mode];
+}
+windowEl.oninput = () => { winByMode[mode] = Math.min(60, Math.max(3, +windowEl.value || MODES[mode].win)); scheduleRender(); };
+renderModes();
+
+// ============================================================================
+// Rendering
+// ============================================================================
 const dropRate = (d) => Math.max(0, 1 - d / FRAME_MS);
 const pct = (x) => Math.round(x * 100) + '%';
 const cls = (x) => (x >= 0.5 ? 'bad' : x > 0 ? 'warn' : 'ok');
-
-function acAfter(d, state) {
-	if (!state) return dropRate(d);         // neutral is never held
-	if (d >= thr() && d < hold()) return 0; // held to a full frame
-	return dropRate(d);
-}
+const clsOk = (x) => (x >= 0.95 ? 'ok' : x >= 0.5 ? 'warn' : 'bad');
+const acAfter = (d, s) => (s && d >= thrFor(s) && d < hold() ? 0 : dropRate(d));
 
 let renderPending = false;
 function scheduleRender() { if (!renderPending) { renderPending = true; requestAnimationFrame(render); } }
 
-function render() {
-	renderPending = false;
+function seqOf(raw, from = -Infinity) { raw = raw.filter((c) => c.t >= from); const out = []; for (const c of raw) if (!out.length || out[out.length - 1] !== c.s) out.push(c.s); return out.filter((s, i) => s !== 0 || (i > 0 && i < out.length - 1)).map((s) => NUMPAD[s]).join(''); }
+function shapeOf(raw) {
+	const q = seqOf(raw).replace(/5/g, '');
+	for (const p of ['623', '323', '636', '626', '639', '421', '121', '414', '424']) if (q.includes(p)) return p;
+	return '';
+}
+
+const judgeCache = new WeakMap();
+function judged(at) {
+	const key = `${thr()}|${hold()}|${JSON.stringify(perState)}|${winByMode[at.mode]}|${deviceAcEl.checked}`;
+	const c = judgeCache.get(at);
+	if (c && c.key === key) return c.v;
+	const raw = judge(at.raw, at);
+	const ac = deviceAcEl.checked ? null : judge(applyAC(at.raw, acCfg()), at);
+	const v = { raw, ac };
+	judgeCache.set(at, { key, v });
+	return v;
+}
+
+function renderCommands() {
+	const list = attempts.filter((a) => a.mode === mode);
 	const rows = [];
-	const list = segs.map((s, i) => ({ ...s, i, prev: segs[i - 1]?.state ?? 0, next: segs[i + 1]?.state ?? cur.state }))
-		.filter((s) => s.state !== 0);
-	const show = list.slice(-300).reverse();
-	for (const s of show) {
-		const d = s.dur, dr = dropRate(d), after = acAfter(d, s.state);
-		const frames = Math.floor(d / FRAME_MS);
+	const agg = { 1: { n: 0, r: 0, a: 0 }, 2: { n: 0, r: 0, a: 0 } };
+	list.forEach((at) => {
+		const j = judged(at);
+		const g = agg[j.raw.side]; g.n++; g.r += j.raw.rate; g.a += j.ac ? j.ac.rate : j.raw.rate;
+	});
+	for (const at of list.slice(-150).reverse()) {
+		const j = judged(at);
+		const idx = attempts.indexOf(at) + 1;
+		const sideLabel = j.raw.side === 1 ? '1P' : '2P';
+		const fail = j.raw.rate < 1 && j.raw.failRuns ? j.raw.failRuns.filter((s, i, arr) => s !== 0 || (i > 0 && i < arr.length - 1)).map((s) => NUMPAD[j.raw.side === 2 ? mirror(s) : s]).join('') : '';
+		const shape = at.mode === 'easySho' || at.mode === 'sho' ? shapeOf(at.raw.filter((c) => c.t >= at.start)) : '';
+		rows.push(`<tr><td>${idx}</td><td class="l">${sideLabel}</td><td class="l seq">${seqOf(at.raw, at.start)}${shape ? ` <span class="tag">${shape}</span>` : ''}${at.implied ? ' <span class="muted">(ボタン無し)</span>' : ''}</td>` +
+			`<td>${(at.button - at.start).toFixed(0)}ms</td><td class="${clsOk(j.raw.rate)}">${pct(j.raw.rate)}</td>` +
+			`<td class="${j.ac ? clsOk(j.ac.rate) : ''}">${j.ac ? pct(j.ac.rate) : '-'}</td><td class="l seq muted">${fail}</td></tr>`);
+	}
+	document.getElementById('attempts').innerHTML = rows.join('') || '<tr><td colspan="7" class="l muted">コマンドを入力してください。</td></tr>';
+	const bar = (g) => g.n ? `<div><div class="meter"><b style="width:${(g.a / g.n) * 100}%"></b><i style="width:${(g.r / g.n) * 100}%"></i></div>` +
+		`<span class="${clsOk(g.r / g.n)}">${pct(g.r / g.n)}</span>${deviceAcEl.checked ? '' : ` → <span class="${clsOk(g.a / g.n)}">${pct(g.a / g.n)}</span>`} <span class="muted">(${g.n}回)</span></div>` : '<div class="muted">まだ記録なし</div>';
+	document.getElementById('cmp').innerHTML = `<div></div><div class="h">1P側（右向き）</div><div class="h">2P側（左向き）</div>` +
+		`<div>${MODES[mode].label}</div>${bar(agg[1])}${bar(agg[2])}`;
+}
+
+function renderHistory() {
+	const list = segs.map((s, i) => ({ ...s, i, prev: segs[i - 1]?.state ?? 0, next: segs[i + 1]?.state ?? cur.state })).filter((s) => s.state !== 0);
+	const rows = [];
+	for (const s of list.slice(-300).reverse()) {
+		const d = s.dur, dr = dropRate(d), after = acAfter(d, s.state), frames = Math.floor(d / FRAME_MS);
 		const notes = [];
 		if (isDiag(s.state) && isCard(s.prev) && isCard(s.next)) notes.push('スライド中の斜め');
 		if (deviceAcEl.checked && Math.abs(d - hold()) <= 1.5) notes.push('<span class="tag ok">AC</span>');
 		rows.push(`<tr><td>${s.i + 1}</td><td class="dir">${ARROW[s.state]} <span class="muted">${NUMPAD[s.state]}</span></td>` +
 			`<td>${frames < 1 ? '&lt;1' : frames}</td><td>${d.toFixed(1)}ms</td>` +
-			`<td class="${cls(dr)}">${pct(dr)}</td><td class="${cls(after)}">${pct(after)}</td><td style="text-align:left">${notes.join(' ')}</td></tr>`);
+			`<td class="${cls(dr)}">${pct(dr)}</td><td class="${deviceAcEl.checked ? '' : cls(after)}">${deviceAcEl.checked ? '-' : pct(after)}</td><td class="l">${notes.join(' ')}</td></tr>`);
 	}
 	document.getElementById('log').innerHTML = rows.join('');
 	renderStats(list);
@@ -340,48 +628,58 @@ function renderStats(list) {
 	const risky = diags.filter((s) => s.dur < FRAME_MS);
 	const expMiss = diags.reduce((a, s) => a + dropRate(s.dur), 0);
 	const expMissAc = diags.reduce((a, s) => a + acAfter(s.dur, s.state), 0);
-	const tooShort = risky.filter((s) => s.dur < thr()).length;
+	const tooShort = risky.filter((s) => s.dur < thrFor(s.state)).length;
 	document.getElementById('stats').innerHTML = `
 		<div>方向入力の数</div><div>${list.length}</div>
 		<div>斜め入力の数</div><div>${diags.length}</div>
 		<div>1フレーム未満の斜め</div><div class="${risky.length ? 'warn' : 'ok'}">${risky.length}</div>
-		<div>斜めの読み落とし期待値（AC無し）</div><div class="${cls(diags.length ? expMiss / diags.length : 0)}">${diags.length ? pct(expMiss / diags.length) : '-'}</div>
-		<div>同（AC ${thr()}ms 適用後）</div><div class="${cls(diags.length ? expMissAc / diags.length : 0)}">${diags.length ? pct(expMissAc / diags.length) : '-'}</div>
+		<div>斜めの読み落とし期待値</div><div class="${cls(diags.length ? expMiss / diags.length : 0)}">${diags.length ? pct(expMiss / diags.length) : '-'}</div>
+		<div>同（AC適用後の予測）</div><div class="${cls(diags.length ? expMissAc / diags.length : 0)}">${diags.length && !deviceAcEl.checked ? pct(expMissAc / diags.length) : '-'}</div>
 		<div>しきい値未満で救えない斜め</div><div>${tooShort}</div>`;
-
-	// histogram 1..16, 17+
 	const buckets = new Array(17).fill(0);
 	for (const s of diags) buckets[Math.min(16, Math.max(0, Math.ceil(s.dur) - 1))]++;
 	const max = Math.max(1, ...buckets);
 	document.getElementById('hist').innerHTML = buckets.map((n, i) => {
-		const ms = i + 1;
-		const color = ms >= 17 ? 'var(--ok)' : ms < thr() ? 'var(--bad)' : 'var(--accent)';
+		const ms = i + 1, color = ms >= 17 ? 'var(--ok)' : ms < thr() ? 'var(--bad)' : 'var(--accent)';
 		return `<div class="bar ${ms === thr() ? 'thr' : ''}" title="${ms === 17 ? '17+' : ms}ms: ${n}件" style="height:${(n / max) * 100}%;background:${color}"></div>`;
 	}).join('');
 	document.getElementById('histLabels').innerHTML = buckets.map((_, i) => `<div>${i === 16 ? '17+' : i + 1}</div>`).join('');
 
-	// Suggested threshold: just below most of your short diagonals (10th percentile)
+	// Suggested thresholds: overall + per diagonal (10th percentile of short ones)
 	let html;
 	if (risky.length < 5) {
-		html = '<span class="muted">1フレーム未満の斜めが5件以上たまると、推奨しきい値を表示します。AC OFFで、抜けやすいコマンド（波動・昇竜など）を何度か入力してください。</span>';
+		html = '<span class="muted">1フレーム未満の斜めが5件以上たまると、推奨しきい値を表示します。AC OFFで、抜けやすいコマンドを何度か入力してください。</span>';
 	} else {
-		const sorted = risky.map((s) => s.dur).sort((a, b) => a - b);
-		const p10 = sorted[Math.floor(sorted.length * 0.1)];
-		const sug = Math.min(16, Math.max(1, Math.floor(p10)));
-		const covered = risky.filter((s) => s.dur >= sug).length;
-		html = `推奨しきい値: <b class="big">${sug}ms</b><br><span class="muted">1フレーム未満の斜め ${risky.length} 件のうち ${covered} 件（${pct(covered / risky.length)}）をACで保持できます。` +
-			(sug < 6 ? '6ms未満は誤入力（意図しない瞬間入力）も保持しやすくなります。' : '') + '</span>';
+		const sug = (arr) => { const v = arr.map((s) => s.dur).sort((a, b) => a - b); return Math.min(16, Math.max(1, Math.floor(v[Math.floor(v.length * 0.1)]))); };
+		const all = sug(risky), covered = risky.filter((s) => s.dur >= all).length;
+		const per = [D|R, D|L, U|R, U|L].map((st) => { const r = risky.filter((s) => s.state === st); return r.length >= 3 ? `${ARROW[st]} ${sug(r)}ms（${r.length}件）` : null; }).filter(Boolean);
+		html = `推奨しきい値: <b class="big">${all}ms</b><br><span class="muted">1フレーム未満の斜め ${risky.length} 件のうち ${covered} 件（${pct(covered / risky.length)}）をACで保持できます。` +
+			(all < 6 ? '6ms未満は誤入力も保持しやすくなります。' : '') + '</span>' +
+			(per.length ? `<br><span class="muted">方向ごとの推奨（詳細設定用）: ${per.join(' / ')}</span>` : '');
 	}
 	document.getElementById('suggest').innerHTML = html;
 }
 
-// ---- Misc -------------------------------------------------------------------
-document.getElementById('btnClear').onclick = () => { segs.length = 0; cur = { state: cur.state, start: performance.now() }; render(); };
+function render() { renderPending = false; renderHistory(); renderCommands(); }
+
+// ============================================================================
+// Misc
+// ============================================================================
+document.getElementById('btnClear').onclick = () => {
+	segs.length = 0; attempts.length = 0; changes.length = 0;
+	changes.push({ t: performance.now(), s: cur.state });
+	cur = { state: cur.state, start: performance.now() };
+	render();
+};
 document.getElementById('btnCsv').onclick = () => {
-	const lines = ['index,numpad,start_ms,duration_ms,drop_rate,drop_rate_with_ac,threshold_ms,hold_ms'];
+	const lines = ['type,index,mode,side,sequence_or_numpad,start_ms,duration_ms,drop_rate_or_success,ac_prediction'];
 	segs.forEach((s, i) => {
 		if (!s.state) return;
-		lines.push([i + 1, NUMPAD[s.state], s.start.toFixed(2), s.dur.toFixed(2), dropRate(s.dur).toFixed(3), acAfter(s.dur, s.state).toFixed(3), thr(), hold()].join(','));
+		lines.push(['input', i + 1, '', '', NUMPAD[s.state], s.start.toFixed(2), s.dur.toFixed(2), dropRate(s.dur).toFixed(3), acAfter(s.dur, s.state).toFixed(3)].join(','));
+	});
+	attempts.forEach((at, i) => {
+		const j = judged(at);
+		lines.push(['command', i + 1, at.mode, j.raw.side === 1 ? '1P' : '2P', seqOf(at.raw, at.start), at.start.toFixed(2), (at.button - at.start).toFixed(2), j.raw.rate.toFixed(3), j.ac ? j.ac.rate.toFixed(3) : ''].join(','));
 	});
 	const a = document.createElement('a');
 	a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
@@ -390,11 +688,20 @@ document.getElementById('btnCsv').onclick = () => {
 };
 window.addEventListener('gamepadconnected', (e) => { if (!hid) setSource(`Gamepad API: ${e.gamepad.id}`); });
 
-// Keyboard fallback for trying the tool without a controller (WASD).
+// Keyboard fallback: WASD = directions, J / K / L = attack
 const keys = new Set();
 const keyState = () => (keys.has('w') ? U : 0) | (keys.has('s') ? D : 0) | (keys.has('a') ? L : 0) | (keys.has('d') ? R : 0);
-window.addEventListener('keydown', (e) => { if ('wasd'.includes(e.key) && !keys.has(e.key)) { keys.add(e.key); if (!srcName) setSource('キーボード (WASD)'); feed(keyState(), e.timeStamp); } });
-window.addEventListener('keyup', (e) => { if (keys.delete(e.key)) feed(keyState(), e.timeStamp); });
+window.addEventListener('keydown', (e) => {
+	if (e.target.tagName === 'INPUT') return;
+	const k = e.key.toLowerCase();
+	if ('wasd'.includes(k) && !keys.has(k)) { keys.add(k); if (!srcName) setSource('キーボード（WASD / JKL）'); feed(keyState(), e.timeStamp); }
+	if ('jkl'.includes(k) && !e.repeat) feedButton(true, e.timeStamp);
+});
+window.addEventListener('keyup', (e) => {
+	const k = e.key.toLowerCase();
+	if (keys.delete(k)) feed(keyState(), e.timeStamp);
+	if ('jkl'.includes(k)) feedButton(false, e.timeStamp);
+});
 
 render();
 </script>

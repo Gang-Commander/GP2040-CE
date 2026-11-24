@@ -86,6 +86,10 @@ export default {
 	'accurate-command-hold-label': 'Hold Time (ms)',
 	'accurate-command-hold-help':
 		'10-50 ms, default 18 (one 60fps frame + 1 ms USB poll). Also used as the length of assist inserts.',
+	'accurate-command-advanced-label': 'Advanced settings',
+	'accurate-command-per-direction-label': 'Set the threshold per direction',
+	'accurate-command-per-direction-help':
+		'Off: every direction uses the threshold above. On: each of the 8 directions (ms, 1-16) uses its own value and overrides the profile threshold. Starts from the current threshold.',
 	'hadoken-assist-label': 'Hadoken Assist (236/214)',
 	'hadoken-assist-help':
 		'Inserts the down-diagonal for one frame on a direct 2→6, 2→4, 6→2 or 4→2. The following direction is delayed by about 1 frame.',

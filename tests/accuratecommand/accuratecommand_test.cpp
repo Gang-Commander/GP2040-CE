@@ -142,6 +142,16 @@ static void scenarios() {
 		const uint32_t settle = s.out.back().t - (s.t0 + 200 * 9500);
 		CHECK(s.out.back().s == 0 && settle <= 3 * 18000, "settle %u us", settle);
 	}
+	{ // Per-direction threshold: down-right at 5 ms, everything else at the global 9 ms
+		AccurateCommandConfig c = cfg(true);
+		c.perStateThresholdUs[D|R] = 5000;
+		Sim s(c);
+		s.run({{D, 30000}, {D|R, 6000}, {R, 30000}});
+		CHECK(s.durOf(1) >= 18000, "3 (6ms) should be held with 5ms threshold, got %u", s.durOf(1));
+		Sim s2(c);
+		s2.run({{D, 30000}, {D|L, 6000}, {L, 30000}});
+		CHECK(s2.durOf(1) == 6000, "1 (6ms) should pass through with global 9ms, got %u", s2.durOf(1));
+	}
 	{ // micros() wrap-around
 		Sim s(cfg(true), 0xFFFFFFFFu - 20000);
 		s.run({{D, 15000}, {D|R, 10000}, {R, 30000}});

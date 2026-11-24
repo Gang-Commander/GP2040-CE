@@ -9,6 +9,11 @@ void AccurateCommand::configure(const AccurateCommandConfig& cfg) {
 	// Clamp to the ranges exposed in the web configurator.
 	if (config.thresholdUs < 1000)  config.thresholdUs = 1000;
 	if (config.thresholdUs > 16000) config.thresholdUs = 16000;
+	for (uint32_t& t : config.perStateThresholdUs) {
+		if (t == 0) continue;              // 0 = follow the global threshold
+		if (t < 1000)  t = 1000;
+		if (t > 16000) t = 16000;
+	}
 	if (config.holdUs < 10000) config.holdUs = 10000;
 	if (config.holdUs > 50000) config.holdUs = 50000;
 
@@ -71,7 +76,7 @@ void AccurateCommand::computeDisplayEnd(Segment& seg, uint32_t& dispEnd) {
 	const bool lagging = (int32_t)(dispStart - seg.start) > 0;
 	uint32_t minShow;
 
-	if (seg.state != 0 && dur < config.thresholdUs) {
+	if (seg.state != 0 && dur < thresholdFor(seg.state)) {
 		// Sub-threshold direction = noise. Pass through as-is when live,
 		// drop it when we are behind (it would only add more lag).
 		minShow = lagging ? 0 : dur;
@@ -116,7 +121,7 @@ uint8_t AccurateCommand::process(uint8_t dpad, uint32_t nowUs) {
 		const uint32_t dur = nowUs - live.start;
 
 		if (config.acEnabled && prev != 0 &&
-		    dur >= config.thresholdUs && dur < config.holdUs)
+		    dur >= thresholdFor(prev) && dur < config.holdUs)
 			holdCount++;
 
 		// For assists, look through a short neutral: 2 -> (5) -> 6 counts as 2 -> 6.

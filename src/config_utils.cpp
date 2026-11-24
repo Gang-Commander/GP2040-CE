@@ -522,6 +522,15 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandHoldTime, DEFAULT_ACCURATE_COMMAND_HOLD_TIME);
     INIT_UNSET_PROPERTY(config.gamepadOptions, hadokenAssistEnabled, !!DEFAULT_HADOKEN_ASSIST_ENABLED);
     INIT_UNSET_PROPERTY(config.gamepadOptions, shoryukenAssistEnabled, !!DEFAULT_SHORYUKEN_ASSIST_ENABLED);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandPerDirection, false);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdUp, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdUpRight, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdRight, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdDownRight, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdDown, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdDownLeft, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdLeft, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdUpLeft, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB1, DEFAULT_INPUT_MODE_B1);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB2, DEFAULT_INPUT_MODE_B2);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB3, DEFAULT_INPUT_MODE_B3);

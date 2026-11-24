@@ -47,7 +47,12 @@ struct AccurateCommandConfig {
 	bool acEnabled = true;
 	bool hadokenAssist = false;
 	bool shoryukenAssist = false;
-	uint32_t thresholdUs = 9000;   // 1..16 ms
+	uint32_t thresholdUs = 9000;   // 1..16 ms (global; also used for neutral/noise checks)
+	/**
+	 * Optional per-direction thresholds, indexed by the 4-bit dpad state
+	 * (e.g. [DOWN|RIGHT] for the down-right diagonal). 0 = use thresholdUs.
+	 */
+	uint32_t perStateThresholdUs[16] = {0};
 	uint32_t holdUs = 18000;       // minimum on-screen time of a held/inserted state
 };
 
@@ -99,6 +104,11 @@ private:
 	void flushToLive(uint32_t nowUs);
 	void computeDisplayEnd(Segment& seg, uint32_t& dispEnd);
 	uint8_t assistInsertion(uint8_t prev, uint8_t next) const;
+	/** Threshold for a given 8-way state (per-direction value if set, else global). */
+	uint32_t thresholdFor(uint8_t state) const {
+		const uint32_t t = config.perStateThresholdUs[state & DIR_MASK];
+		return t ? t : config.thresholdUs;
+	}
 
 	static bool timeReached(uint32_t now, uint32_t t) { return (int32_t)(now - t) >= 0; }
 

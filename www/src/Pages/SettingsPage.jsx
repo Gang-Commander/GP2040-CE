@@ -1031,6 +1031,15 @@ const schema = yup.object().shape({
 		.min(10)
 		.max(50)
 		.label('Accurate Command Hold Time'),
+	accurateCommandPerDirection: yup.number().label('Per-direction thresholds'),
+	accurateCommandThresholdUp: yup.number().min(1).max(16).label('Threshold Up'),
+	accurateCommandThresholdUpRight: yup.number().min(1).max(16).label('Threshold UpRight'),
+	accurateCommandThresholdRight: yup.number().min(1).max(16).label('Threshold Right'),
+	accurateCommandThresholdDownRight: yup.number().min(1).max(16).label('Threshold DownRight'),
+	accurateCommandThresholdDown: yup.number().min(1).max(16).label('Threshold Down'),
+	accurateCommandThresholdDownLeft: yup.number().min(1).max(16).label('Threshold DownLeft'),
+	accurateCommandThresholdLeft: yup.number().min(1).max(16).label('Threshold Left'),
+	accurateCommandThresholdUpLeft: yup.number().min(1).max(16).label('Threshold UpLeft'),
 	hadokenAssistEnabled: yup.number().label('Hadoken Assist'),
 	shoryukenAssistEnabled: yup.number().label('Shoryuken Assist'),
 	miniMenuGamepadInput: yup.number().required().label('Mini Menu'),
@@ -1130,6 +1139,15 @@ const FormContext = ({ setButtonLabels, setKeyMappings }) => {
 			'accurateCommandHoldTime',
 			'hadokenAssistEnabled',
 			'shoryukenAssistEnabled',
+			'accurateCommandPerDirection',
+			'accurateCommandThresholdUp',
+			'accurateCommandThresholdUpRight',
+			'accurateCommandThresholdRight',
+			'accurateCommandThresholdDownRight',
+			'accurateCommandThresholdDown',
+			'accurateCommandThresholdDownLeft',
+			'accurateCommandThresholdLeft',
+			'accurateCommandThresholdUpLeft',
 		].forEach((key) => {
 			if (values[key] !== undefined && values[key] !== '')
 				values[key] = parseInt(values[key]);
@@ -3260,6 +3278,167 @@ export default function SettingsPage() {
 															<Form.Control.Feedback type="invalid">
 																{errors.accurateCommandHoldTime}
 															</Form.Control.Feedback>
+														</Col>
+													</Form.Group>
+													{/* Advanced: per-direction thresholds, laid out like a numpad */}
+													<Form.Group className="row mb-3">
+														<Col sm={12}>
+															<details
+																open={Boolean(values.accurateCommandPerDirection)}
+															>
+																<summary className="mb-2">
+																	{t('SettingsPage:accurate-command-advanced-label')}
+																</summary>
+																<Form.Check
+																	label={t(
+																		'SettingsPage:accurate-command-per-direction-label',
+																	)}
+																	type="switch"
+																	id="accurateCommandPerDirection"
+																	isInvalid={false}
+																	checked={Boolean(values.accurateCommandPerDirection)}
+																	onChange={(e) => {
+																		setFieldValue(
+																			'accurateCommandPerDirection',
+																			e.target.checked ? 1 : 0,
+																		);
+																		// start from the global threshold so nothing changes until edited
+																		if (e.target.checked) {
+																			[
+																				'accurateCommandThresholdUp',
+																				'accurateCommandThresholdUpRight',
+																				'accurateCommandThresholdRight',
+																				'accurateCommandThresholdDownRight',
+																				'accurateCommandThresholdDown',
+																				'accurateCommandThresholdDownLeft',
+																				'accurateCommandThresholdLeft',
+																				'accurateCommandThresholdUpLeft',
+																			].forEach((key) =>
+																				setFieldValue(key, values.accurateCommandThreshold),
+																			);
+																		}
+																	}}
+																/>
+																<Form.Text muted>
+																	{t('SettingsPage:accurate-command-per-direction-help')}
+																</Form.Text>
+																{Boolean(values.accurateCommandPerDirection) && (
+																	<div
+																		className="mt-2"
+																		style={{
+																			display: 'grid',
+																			gridTemplateColumns: 'repeat(3, 90px)',
+																			gap: '8px',
+																		}}
+																	>
+																<div>
+																	<Form.Label className="mb-0 small">↖</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdUpLeft"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdUpLeft}
+																		isInvalid={errors.accurateCommandThresholdUpLeft}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																<div>
+																	<Form.Label className="mb-0 small">↑</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdUp"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdUp}
+																		isInvalid={errors.accurateCommandThresholdUp}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																<div>
+																	<Form.Label className="mb-0 small">↗</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdUpRight"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdUpRight}
+																		isInvalid={errors.accurateCommandThresholdUpRight}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																<div>
+																	<Form.Label className="mb-0 small">←</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdLeft"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdLeft}
+																		isInvalid={errors.accurateCommandThresholdLeft}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																<div className="d-flex align-items-center justify-content-center text-muted">5</div>
+																<div>
+																	<Form.Label className="mb-0 small">→</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdRight"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdRight}
+																		isInvalid={errors.accurateCommandThresholdRight}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																<div>
+																	<Form.Label className="mb-0 small">↙</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdDownLeft"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdDownLeft}
+																		isInvalid={errors.accurateCommandThresholdDownLeft}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																<div>
+																	<Form.Label className="mb-0 small">↓</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdDown"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdDown}
+																		isInvalid={errors.accurateCommandThresholdDown}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																<div>
+																	<Form.Label className="mb-0 small">↘</Form.Label>
+																	<Form.Control
+																		type="number"
+																		name="accurateCommandThresholdDownRight"
+																		className="form-control-sm"
+																		value={values.accurateCommandThresholdDownRight}
+																		isInvalid={errors.accurateCommandThresholdDownRight}
+																		onChange={handleChange}
+																		min={1}
+																		max={16}
+																	/>
+																</div>
+																	</div>
+																)}
+															</details>
 														</Col>
 													</Form.Group>
 													<Form.Group className="row mb-3">

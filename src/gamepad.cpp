@@ -508,6 +508,19 @@ void Gamepad::configureAccurateCommand() {
 	cfg.holdUs = options.accurateCommandHoldTime * 1000;
 	cfg.hadokenAssist = options.hadokenAssistEnabled;
 	cfg.shoryukenAssist = options.shoryukenAssistEnabled;
+	// Advanced per-direction thresholds take precedence over the global /
+	// profile threshold when enabled (the profile can still switch AC on/off).
+	if (options.accurateCommandPerDirection) {
+		using AC = AccurateCommand;
+		cfg.perStateThresholdUs[AC::UP] = options.accurateCommandThresholdUp * 1000;
+		cfg.perStateThresholdUs[AC::UP|AC::RIGHT] = options.accurateCommandThresholdUpRight * 1000;
+		cfg.perStateThresholdUs[AC::RIGHT] = options.accurateCommandThresholdRight * 1000;
+		cfg.perStateThresholdUs[AC::DOWN|AC::RIGHT] = options.accurateCommandThresholdDownRight * 1000;
+		cfg.perStateThresholdUs[AC::DOWN] = options.accurateCommandThresholdDown * 1000;
+		cfg.perStateThresholdUs[AC::DOWN|AC::LEFT] = options.accurateCommandThresholdDownLeft * 1000;
+		cfg.perStateThresholdUs[AC::LEFT] = options.accurateCommandThresholdLeft * 1000;
+		cfg.perStateThresholdUs[AC::UP|AC::LEFT] = options.accurateCommandThresholdUpLeft * 1000;
+	}
 	accurateCommand.configure(cfg); // clamps ranges and resets history
 }
 

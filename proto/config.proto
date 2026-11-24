@@ -103,6 +103,17 @@ message GamepadOptions
     optional uint32 accurateCommandHoldTime = 72;  // ms, 10-50 (18 = one 60fps frame + 1ms USB poll)
     optional bool hadokenAssistEnabled = 73;
     optional bool shoryukenAssistEnabled = 74;
+
+    // Advanced: per-direction thresholds (ms, 1-16). Used only when accurateCommandPerDirection is on.
+    optional bool accurateCommandPerDirection = 75;
+    optional uint32 accurateCommandThresholdUp = 76;
+    optional uint32 accurateCommandThresholdUpRight = 77;
+    optional uint32 accurateCommandThresholdRight = 78;
+    optional uint32 accurateCommandThresholdDownRight = 79;
+    optional uint32 accurateCommandThresholdDown = 80;
+    optional uint32 accurateCommandThresholdDownLeft = 81;
+    optional uint32 accurateCommandThresholdLeft = 82;
+    optional uint32 accurateCommandThresholdUpLeft = 83;
 }
 
 message KeyboardMapping
