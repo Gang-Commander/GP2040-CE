@@ -52,6 +52,17 @@ export default {
 	},
 	'profile-label': 'プロファイル',
 	'debounce-delay-label': 'チャタリング除去ディレイ(ミリ秒)',
+	'accurate-command-header': "Accurate Command（精密入力）",
+	'accurate-command-enabled-label': "Accurate Commandを有効にする",
+	'accurate-command-description': "しきい値以上続いた短い方向入力（一瞬の斜めなど）を、60fpsのゲームが必ず読み取れる長さまで保持します。しきい値未満の入力はそのまま出力します。攻撃ボタンは遅延しません。",
+	'accurate-command-threshold-label': "しきい値（ミリ秒）",
+	'accurate-command-threshold-help': "1〜16ms、初期値9。推奨6〜12。小さいほど斜めを拾いやすいが、誤入力も保持されやすくなります。",
+	'accurate-command-hold-label': "保持時間（ミリ秒）",
+	'accurate-command-hold-help': "10〜50ms、初期値18（60fpsの1フレーム＋USBポーリング1ms）。支援モードの差し込み長にも使います。",
+	'hadoken-assist-label': "波動拳支援（236/214）",
+	'hadoken-assist-help': "2→6、2→4、6→2、4→2が斜めを挟まずに切り替わったとき、下斜めを1フレーム差し込みます。次の方向は約1F遅れます。",
+	'shoryuken-assist-label': "昇竜拳支援（623/421）",
+	'shoryuken-assist-help': "6→3、4→1が直接切り替わったとき、2を1フレーム差し込みます。斜めは約1F遅れます。",
 	'mini-menu-gamepad-input':
 		'ディスプレイメニューの入力にゲームパッド入力を利用',
 	'ps4-mode-explanation-text':

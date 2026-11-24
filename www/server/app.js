@@ -310,6 +310,9 @@ const createPinMappings = ({ profileLabel = 'Profile', enabled = true }) => {
 		pinInversionEnabled: false,
 		invertedPins: [],
 		socdModeOverride: false,
+		accurateCommandOverride: false,
+		accurateCommandEnabled: true,
+		accurateCommandThreshold: 9,
 		socdMode: 1,
 	};
 
@@ -491,6 +494,11 @@ app.get('/api/getGamepadOptions', (req, res) => {
 		fnButtonPin: -1,
 		profileNumber: 2,
 		debounceDelay: 5,
+		accurateCommandEnabled: 1,
+		accurateCommandThreshold: 9,
+		accurateCommandHoldTime: 18,
+		hadokenAssistEnabled: 0,
+		shoryukenAssistEnabled: 0,
 		inputModeB1: 1,
 		inputModeB2: 0,
 		inputModeB3: 2,

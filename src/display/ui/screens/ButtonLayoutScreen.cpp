@@ -133,6 +133,8 @@ int8_t ButtonLayoutScreen::update() {
 	generateHeader();
     if (isInputHistoryEnabled)
 		processInputHistory();
+    else
+        generateAccurateCommandFooter();
 
     // check for exit/screen change
     if (DriverManager::getInstance().isConfigMode()) {
@@ -147,6 +149,24 @@ int8_t ButtonLayoutScreen::update() {
     }
 
 	return -1;
+}
+
+// Bottom line: Accurate Command debug counters (only when input history is off,
+// since both share the footer). Counters live in RAM and reset on power cycle.
+//   "AC 225"            -> 225 short directions were held to a full frame
+//   "AC 225  ASSIST 12" -> plus 12 hadoken/shoryuken assist inserts
+void ButtonLayoutScreen::generateAccurateCommandFooter() {
+    const AccurateCommand& ac = Storage::getInstance().GetGamepad()->getAccurateCommand();
+    const AccurateCommandConfig& cfg = ac.getConfig();
+    footer.clear();
+    if (!ac.isActive())
+        return;
+    if (cfg.acEnabled)
+        footer = "AC " + std::to_string(ac.getHoldCount());
+    else
+        footer = "AC OFF";
+    if (cfg.hadokenAssist || cfg.shoryukenAssist)
+        footer += "  ASSIST " + std::to_string(ac.getAssistCount());
 }
 
 void ButtonLayoutScreen::generateHeader() {

@@ -240,6 +240,57 @@ const ProfileSOCDMode = memo(function ProfileSOCDMode({
 	);
 });
 
+// Per-profile Accurate Command override: global / OFF / ON with threshold 1-16ms
+const ACCURATE_COMMAND_THRESHOLDS = Array.from({ length: 16 }, (_, i) => i + 1);
+
+const ProfileAccurateCommand = memo(function ProfileAccurateCommand({
+	profileIndex,
+}: {
+	profileIndex: number;
+}) {
+	const { t } = useTranslation('');
+	const setProfileAccurateCommand = useProfilesStore(
+		(state) => state.setProfileAccurateCommand,
+	);
+	const override = useProfilesStore(
+		(state) => state.profiles[profileIndex].accurateCommandOverride,
+	);
+	const enabled = useProfilesStore(
+		(state) => state.profiles[profileIndex].accurateCommandEnabled,
+	);
+	const threshold = useProfilesStore(
+		(state) => state.profiles[profileIndex].accurateCommandThreshold,
+	);
+	const value = !override ? -1 : enabled ? threshold || 9 : 0;
+
+	return (
+		<div className="mt-3">
+			<Form.Label>{t('PinMapping:profile-accurate-command-label')}</Form.Label>
+			<Form.Select
+				value={value}
+				onChange={(e) =>
+					setProfileAccurateCommand(profileIndex, Number(e.target.value))
+				}
+			>
+				<option value={-1}>
+					{t('PinMapping:profile-accurate-command-global')}
+				</option>
+				<option value={0}>
+					{t('PinMapping:profile-accurate-command-off')}
+				</option>
+				{ACCURATE_COMMAND_THRESHOLDS.map((ms) => (
+					<option key={ms} value={ms}>
+						{t('PinMapping:profile-accurate-command-on', { ms })}
+					</option>
+				))}
+			</Form.Select>
+			<Form.Text muted>
+				{t('PinMapping:profile-accurate-command-description')}
+			</Form.Text>
+		</div>
+	);
+});
+
 const PinSelectList = memo(function PinSelectList({
 	profileIndex,
 	gamepadOptions,
@@ -473,6 +524,7 @@ const PinSection = memo(function PinSection({
 								profileIndex={profileIndex}
 								gamepadOptions={gamepadOptions}
 							/>
+							<ProfileAccurateCommand profileIndex={profileIndex} />
 						</Col>
 						<Col className="order-first order-md-last">
 							{profileIndex > 0 && (

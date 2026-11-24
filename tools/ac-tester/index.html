@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AC 入力履歴テスター</title>
+<style>
+	:root {
+		--bg: #0e1622; --panel: #152131; --line: #24344a; --text: #dbe6f3; --muted: #8296ad;
+		--accent: #4cc3ff; --ok: #5fd3a3; --warn: #ffb547; --bad: #ff5b6e;
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+	header { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+	h1 { font-size: 18px; margin: 0; }
+	h2 { font-size: 14px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+	main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px 20px; }
+	@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+	.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+	button { background: #20324a; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+	button:hover { border-color: var(--accent); }
+	button.primary { background: var(--accent); color: #04121f; border-color: var(--accent); font-weight: 600; }
+	button:disabled { opacity: .4; cursor: default; }
+	.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+	.muted { color: var(--muted); font-size: 12px; }
+	input[type=range] { flex: 1; }
+	.status { font-size: 12px; color: var(--muted); }
+	.status b { color: var(--text); }
+	.live { font-size: 64px; text-align: center; line-height: 1; height: 72px; }
+	.live small { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+	table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+	th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+	th { color: var(--muted); font-weight: 500; font-size: 12px; position: sticky; top: 0; background: var(--panel); }
+	td.dir { text-align: left; font-size: 18px; }
+	.tablewrap { max-height: 60vh; overflow: auto; }
+	.bad { color: var(--bad); } .warn { color: var(--warn); } .ok { color: var(--ok); }
+	.tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11px; border: 1px solid currentColor; margin-left: 4px; }
+	.stat { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+	.stat div:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+	.hist { display: grid; grid-template-columns: repeat(17, 1fr); gap: 3px; align-items: end; height: 110px; margin-top: 8px; position: relative; }
+	.hist .bar { background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; position: relative; }
+	.hist .bar.thr { outline: 2px solid var(--warn); outline-offset: 1px; }
+	.histlabels { display: grid; grid-template-columns: repeat(17, 1fr); gap: 3px; font-size: 10px; color: var(--muted); text-align: center; }
+	.calib { border: 1px dashed var(--warn); border-radius: 8px; padding: 10px; margin-top: 8px; }
+	.big { font-size: 20px; font-weight: 700; }
+	details summary { cursor: pointer; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+	<div>
+		<h1>AC 入力履歴テスター</h1>
+		<div class="muted">方向入力ごとの持続時間と、60fpsでの理論上の読み落とし率を記録します。</div>
+	</div>
+	<div class="row">
+		<button id="btnClear">クリア</button>
+		<button id="btnCsv">CSV保存</button>
+	</div>
+</header>
+
+<main>
+	<section>
+		<div class="panel">
+			<h2>接続</h2>
+			<div class="row">
+				<button class="primary" id="btnHid">WebHIDで接続（1ms精度）</button>
+			</div>
+			<div class="muted">WebHIDはPS3 / DInput / Switch などHIDモードで使えます（XInputモードは不可）。接続後にキャリブレーションが必要です。</div>
+			<div class="calib" id="calibBox" hidden>
+				<div id="calibText" class="big"></div>
+				<div class="muted" id="calibHint">方向を押したまま「記録」を押してください（マウス・キーボードで）。</div>
+				<div class="row" style="margin-top:8px"><button class="primary" id="btnCalib">記録</button><button id="btnCalibCancel">中止</button></div>
+			</div>
+			<hr style="border-color:var(--line)">
+			<div class="muted">Gamepad APIは、どのモードでもコントローラーを押せば自動で使われます。Chromeの内部ポーリングが約4msのため、持続時間は±4ms程度の誤差を含みます。</div>
+			<div class="status" style="margin-top:8px">入力元: <b id="srcName">未接続</b></div>
+		</div>
+
+		<div class="panel">
+			<h2>現在の入力</h2>
+			<div class="live" id="live">・<small id="liveSub">ニュートラル</small></div>
+		</div>
+
+		<div class="panel">
+			<h2>ACの設定（プレビュー用）</h2>
+			<div class="row"><span style="width:96px">しきい値</span><input type="range" id="thr" min="1" max="16" value="9"><b id="thrVal" style="width:44px;text-align:right">9ms</b></div>
+			<div class="row"><span style="width:96px">保持時間</span><input type="range" id="hold" min="10" max="50" value="18"><b id="holdVal" style="width:44px;text-align:right">18ms</b></div>
+			<div class="row"><label><input type="checkbox" id="deviceAc"> 本体のACがONの状態で計測している</label></div>
+			<div class="muted">「AC適用後」列は、ここで選んだしきい値で本体のACを使った場合の予測です。ACをOFFにして計測し、しきい値を決める使い方を想定しています。</div>
+		</div>
+
+		<div class="panel">
+			<h2>集計（斜め入力）</h2>
+			<div class="stat" id="stats"></div>
+			<div class="hist" id="hist"></div>
+			<div class="histlabels" id="histLabels"></div>
+			<div class="muted" style="margin-top:6px">斜め入力の持続時間の分布（ms）。オレンジ枠が現在のしきい値。</div>
+			<div style="margin-top:10px" id="suggest"></div>
+		</div>
+	</section>
+
+	<section>
+		<div class="panel">
+			<h2>入力履歴（新しい順）</h2>
+			<div class="tablewrap">
+				<table>
+					<thead><tr><th>#</th><th style="text-align:left">入力</th><th>フレーム</th><th>持続時間</th><th>読み落とし率</th><th>AC適用後</th><th style="text-align:left">メモ</th></tr></thead>
+					<tbody id="log"></tbody>
+				</table>
+			</div>
+		</div>
+		<details class="panel">
+			<summary>読み落とし率の計算方法</summary>
+			<p class="muted">60fpsのゲームは約16.7msごとに入力を読みます。持続時間 d ms の入力が読み取りの瞬間に重ならない確率は、読み取りのタイミングがランダムなら max(0, 1 − d / 16.7) です（例: 6ms → 64%）。実際のゲームはUSBポーリング（1ms）分さらに不利になります。</p>
+			<p class="muted">ACは「しきい値以上・保持時間未満」の方向入力を保持時間まで延長するので、その入力の読み落とし率は0%になります。しきい値未満の入力は変化しません。</p>
+		</details>
+	</section>
+</main>
+
+<script>
+'use strict';
+// ---- Direction model --------------------------------------------------------
+// bits: 1=UP 2=DOWN 4=LEFT 8=RIGHT (same as GP2040-CE)
+const U = 1, D = 2, L = 4, R = 8;
+const ARROW = { 0: '・', [U]: '↑', [D]: '↓', [L]: '←', [R]: '→', [U|L]: '↖', [U|R]: '↗', [D|L]: '↙', [D|R]: '↘' };
+const NUMPAD = { 0: '5', [U]: '8', [D]: '2', [L]: '4', [R]: '6', [U|L]: '7', [U|R]: '9', [D|L]: '1', [D|R]: '3' };
+const FRAME_MS = 1000 / 60;
+const isDiag = (s) => (s & (U|D)) && (s & (L|R));
+const isCard = (s) => s === U || s === D || s === L || s === R;
+
+// SOCD-clean what we read (the device normally already did this).
+function socdNeutral(s) {
+	if ((s & (L|R)) === (L|R)) s &= ~(L|R);
+	if ((s & (U|D)) === (U|D)) s &= ~(U|D);
+	return s;
+}
+
+// ---- Recording --------------------------------------------------------------
+const segs = [];          // closed segments {state, start, end, dur}
+let cur = { state: 0, start: performance.now() };
+let srcName = '';
+
+function feed(state, t) {
+	state = socdNeutral(state);
+	if (state === cur.state) return;
+	const seg = { state: cur.state, start: cur.start, end: t, dur: t - cur.start };
+	segs.push(seg);
+	if (segs.length > 2000) segs.shift();
+	cur = { state, start: t };
+	updateLive();
+	scheduleRender();
+}
+
+function updateLive() {
+	document.getElementById('live').firstChild.nodeValue = ARROW[cur.state] ?? '?';
+	document.getElementById('liveSub').textContent = cur.state ? `${NUMPAD[cur.state]} 入力中` : 'ニュートラル';
+}
+
+// ---- Gamepad API source -----------------------------------------------------
+// Works in every input mode (incl. XInput). Chrome polls the OS at ~250 Hz.
+let lastPadStamp = new Map();
+function decodeGamepad(gp) {
+	let s = 0;
+	const b = gp.buttons;
+	const pressed = (i) => b[i] && (b[i].pressed || b[i].value > 0.5);
+	if (b.length > 15) {
+		if (pressed(12)) s |= U; if (pressed(13)) s |= D;
+		if (pressed(14)) s |= L; if (pressed(15)) s |= R;
+	}
+	const a = gp.axes;
+	// Left stick (GP2040 "Left Analog" D-pad mode)
+	if (a.length >= 2) {
+		if (a[1] < -0.5) s |= U; if (a[1] > 0.5) s |= D;
+		if (a[0] < -0.5) s |= L; if (a[0] > 0.5) s |= R;
+	}
+	// Non-standard hat axis (DInput on some browsers, axes[9]): -1..1 in 8 steps, >1 = neutral
+	if (a.length > 9 && a[9] >= -1.01 && a[9] <= 1.01) {
+		const idx = Math.round((a[9] + 1) * 3.5);
+		s |= [U, U|R, R, D|R, D, D|L, L, U|L][idx] ?? 0;
+	}
+	return s;
+}
+
+// Poll as fast as timers allow; gp.timestamp gives the browser's own sample time,
+// so the measured durations do not depend on how fast this loop runs.
+setInterval(() => { if (!hid) pollOnce(); }, 1);
+function pollOnce() {
+	const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+	for (const gp of pads) {
+		if (!gp) continue;
+		if (lastPadStamp.get(gp.index) === gp.timestamp) continue;
+		lastPadStamp.set(gp.index, gp.timestamp);
+		if (!srcName) setSource(`Gamepad API: ${gp.id}`);
+		feed(decodeGamepad(gp), gp.timestamp || performance.now());
+	}
+}
+
+function setSource(name) { srcName = name; document.getElementById('srcName').textContent = name; }
+
+// ---- WebHID source ----------------------------------------------------------
+// 1 ms resolution from the raw HID reports. The report layout differs per
+// input mode, so the user calibrates once: neutral, then each direction.
+let hid = null;
+let calib = null; // { reportId, neutral: Uint8Array, dirs: {U:..,...}, decode(bytes) }
+let lastReport = null; // { reportId, bytes }
+
+document.getElementById('btnHid').onclick = async () => {
+	if (!('hid' in navigator)) { alert('このブラウザはWebHIDに対応していません。PCのChrome / Edgeを使ってください。'); return; }
+	try {
+		const [dev] = await navigator.hid.requestDevice({ filters: [] });
+		if (!dev) return;
+		if (!dev.opened) await dev.open();
+		hid = dev;
+		setSource(`WebHID: ${dev.productName}（要キャリブレーション）`);
+		dev.addEventListener('inputreport', onReport);
+		startCalibration();
+	} catch (e) { alert('接続できませんでした: ' + e.message); }
+};
+
+function onReport(e) {
+	const bytes = new Uint8Array(e.data.buffer.slice(e.data.byteOffset, e.data.byteOffset + e.data.byteLength));
+	lastReport = { reportId: e.reportId, bytes };
+	if (calib && e.reportId === calib.reportId) feed(calib.decode(bytes), e.timeStamp);
+}
+
+const CALIB_STEPS = [
+	{ key: 'N', label: 'ニュートラル（何も押さない）' },
+	{ key: 'U', label: '↑ を押したまま' },
+	{ key: 'D', label: '↓ を押したまま' },
+	{ key: 'L', label: '← を押したまま' },
+	{ key: 'R', label: '→ を押したまま' },
+];
+let calibStep = 0, calibData = {};
+function startCalibration() {
+	calib = null; calibStep = 0; calibData = {};
+	document.getElementById('calibBox').hidden = false;
+	showCalibStep();
+}
+function showCalibStep() {
+	document.getElementById('calibText').textContent = `${calibStep + 1}/5: ${CALIB_STEPS[calibStep].label}`;
+}
+document.getElementById('btnCalibCancel').onclick = () => { document.getElementById('calibBox').hidden = true; };
+document.getElementById('btnCalib').onclick = () => {
+	if (!lastReport) { alert('まだレポートが届いていません。ボタンを一度押してから試してください。'); return; }
+	calibData[CALIB_STEPS[calibStep].key] = { reportId: lastReport.reportId, bytes: lastReport.bytes.slice() };
+	calibStep++;
+	if (calibStep < CALIB_STEPS.length) { showCalibStep(); return; }
+	try {
+		calib = buildDecoder(calibData);
+		document.getElementById('calibBox').hidden = true;
+		setSource(`WebHID: ${hid.productName}（${calib.kind}）`);
+	} catch (e) {
+		alert('キャリブレーションに失敗しました: ' + e.message);
+		startCalibration();
+	}
+};
+
+// Figure out how directions are encoded: hat switch, independent bits, or analog axes.
+function buildDecoder(c) {
+	const n = c.N.bytes, reportId = c.N.reportId;
+	const dirs = { U, D, L, R };
+	const diffs = {};
+	for (const k of ['U', 'D', 'L', 'R']) {
+		if (c[k].reportId !== reportId) throw new Error('レポートIDが一致しません');
+		const d = [];
+		for (let i = 0; i < n.length; i++) if (c[k].bytes[i] !== n[i]) d.push(i);
+		if (!d.length) throw new Error(`${k} の入力が検出できません`);
+		diffs[k] = d;
+	}
+	// 1) Hat switch: all four change the same byte, low nibble U=0 R=2 D=4 L=6
+	const hb = diffs.U[0];
+	if (['D', 'L', 'R'].every((k) => diffs[k].includes(hb))) {
+		const nib = (k) => c[k].bytes[hb] & 0x0f;
+		if (nib('U') === 0 && nib('R') === 2 && nib('D') === 4 && nib('L') === 6) {
+			const map = [U, U|R, R, D|R, D, D|L, L, U|L];
+			return { reportId, kind: 'ハットスイッチ', decode: (b) => map[b[hb] & 0x0f] ?? 0 };
+		}
+	}
+	// 2) Analog axes (Left/Right Analog D-pad mode): neutral ~0x80, pressed far away
+	const axisLike = (k) => diffs[k].length <= 2 && diffs[k].some((i) => Math.abs(n[i] - 0x80) <= 0x10 && Math.abs(c[k].bytes[i] - n[i]) > 0x40);
+	if (['U', 'D', 'L', 'R'].every(axisLike)) {
+		const probes = ['U', 'D', 'L', 'R'].map((k) => {
+			const i = diffs[k].find((j) => Math.abs(c[k].bytes[j] - n[j]) > 0x40);
+			return { bit: dirs[k], i, sign: Math.sign(c[k].bytes[i] - n[i]) };
+		});
+		return { reportId, kind: 'アナログ軸', decode: (b) => probes.reduce((s, p) => (Math.sign(b[p.i] - n[p.i]) === p.sign && Math.abs(b[p.i] - n[p.i]) > 0x40 ? s | p.bit : s), 0) };
+	}
+	// 3) Independent bits
+	const probes = ['U', 'D', 'L', 'R'].map((k) => {
+		const i = diffs[k][0];
+		const mask = c[k].bytes[i] ^ n[i];
+		return { bit: dirs[k], i, mask: mask & -mask, on: c[k].bytes[i] & (mask & -mask) };
+	});
+	return { reportId, kind: 'ビット', decode: (b) => probes.reduce((s, p) => ((b[p.i] & p.mask) === p.on ? s | p.bit : s), 0) };
+}
+
+// ---- Analysis & rendering ---------------------------------------------------
+const thrEl = document.getElementById('thr'), holdEl = document.getElementById('hold');
+const deviceAcEl = document.getElementById('deviceAc');
+const thr = () => +thrEl.value, hold = () => +holdEl.value;
+thrEl.oninput = () => { document.getElementById('thrVal').textContent = thr() + 'ms'; scheduleRender(); };
+holdEl.oninput = () => { document.getElementById('holdVal').textContent = hold() + 'ms'; scheduleRender(); };
+deviceAcEl.onchange = scheduleRender;
+
+const dropRate = (d) => Math.max(0, 1 - d / FRAME_MS);
+const pct = (x) => Math.round(x * 100) + '%';
+const cls = (x) => (x >= 0.5 ? 'bad' : x > 0 ? 'warn' : 'ok');
+
+function acAfter(d, state) {
+	if (!state) return dropRate(d);         // neutral is never held
+	if (d >= thr() && d < hold()) return 0; // held to a full frame
+	return dropRate(d);
+}
+
+let renderPending = false;
+function scheduleRender() { if (!renderPending) { renderPending = true; requestAnimationFrame(render); } }
+
+function render() {
+	renderPending = false;
+	const rows = [];
+	const list = segs.map((s, i) => ({ ...s, i, prev: segs[i - 1]?.state ?? 0, next: segs[i + 1]?.state ?? cur.state }))
+		.filter((s) => s.state !== 0);
+	const show = list.slice(-300).reverse();
+	for (const s of show) {
+		const d = s.dur, dr = dropRate(d), after = acAfter(d, s.state);
+		const frames = Math.floor(d / FRAME_MS);
+		const notes = [];
+		if (isDiag(s.state) && isCard(s.prev) && isCard(s.next)) notes.push('スライド中の斜め');
+		if (deviceAcEl.checked && Math.abs(d - hold()) <= 1.5) notes.push('<span class="tag ok">AC</span>');
+		rows.push(`<tr><td>${s.i + 1}</td><td class="dir">${ARROW[s.state]} <span class="muted">${NUMPAD[s.state]}</span></td>` +
+			`<td>${frames < 1 ? '&lt;1' : frames}</td><td>${d.toFixed(1)}ms</td>` +
+			`<td class="${cls(dr)}">${pct(dr)}</td><td class="${cls(after)}">${pct(after)}</td><td style="text-align:left">${notes.join(' ')}</td></tr>`);
+	}
+	document.getElementById('log').innerHTML = rows.join('');
+	renderStats(list);
+}
+
+function renderStats(list) {
+	const diags = list.filter((s) => isDiag(s.state));
+	const risky = diags.filter((s) => s.dur < FRAME_MS);
+	const expMiss = diags.reduce((a, s) => a + dropRate(s.dur), 0);
+	const expMissAc = diags.reduce((a, s) => a + acAfter(s.dur, s.state), 0);
+	const tooShort = risky.filter((s) => s.dur < thr()).length;
+	document.getElementById('stats').innerHTML = `
+		<div>方向入力の数</div><div>${list.length}</div>
+		<div>斜め入力の数</div><div>${diags.length}</div>
+		<div>1フレーム未満の斜め</div><div class="${risky.length ? 'warn' : 'ok'}">${risky.length}</div>
+		<div>斜めの読み落とし期待値（AC無し）</div><div class="${cls(diags.length ? expMiss / diags.length : 0)}">${diags.length ? pct(expMiss / diags.length) : '-'}</div>
+		<div>同（AC ${thr()}ms 適用後）</div><div class="${cls(diags.length ? expMissAc / diags.length : 0)}">${diags.length ? pct(expMissAc / diags.length) : '-'}</div>
+		<div>しきい値未満で救えない斜め</div><div>${tooShort}</div>`;
+
+	// histogram 1..16, 17+
+	const buckets = new Array(17).fill(0);
+	for (const s of diags) buckets[Math.min(16, Math.max(0, Math.ceil(s.dur) - 1))]++;
+	const max = Math.max(1, ...buckets);
+	document.getElementById('hist').innerHTML = buckets.map((n, i) => {
+		const ms = i + 1;
+		const color = ms >= 17 ? 'var(--ok)' : ms < thr() ? 'var(--bad)' : 'var(--accent)';
+		return `<div class="bar ${ms === thr() ? 'thr' : ''}" title="${ms === 17 ? '17+' : ms}ms: ${n}件" style="height:${(n / max) * 100}%;background:${color}"></div>`;
+	}).join('');
+	document.getElementById('histLabels').innerHTML = buckets.map((_, i) => `<div>${i === 16 ? '17+' : i + 1}</div>`).join('');
+
+	// Suggested threshold: just below most of your short diagonals (10th percentile)
+	let html;
+	if (risky.length < 5) {
+		html = '<span class="muted">1フレーム未満の斜めが5件以上たまると、推奨しきい値を表示します。AC OFFで、抜けやすいコマンド（波動・昇竜など）を何度か入力してください。</span>';
+	} else {
+		const sorted = risky.map((s) => s.dur).sort((a, b) => a - b);
+		const p10 = sorted[Math.floor(sorted.length * 0.1)];
+		const sug = Math.min(16, Math.max(1, Math.floor(p10)));
+		const covered = risky.filter((s) => s.dur >= sug).length;
+		html = `推奨しきい値: <b class="big">${sug}ms</b><br><span class="muted">1フレーム未満の斜め ${risky.length} 件のうち ${covered} 件（${pct(covered / risky.length)}）をACで保持できます。` +
+			(sug < 6 ? '6ms未満は誤入力（意図しない瞬間入力）も保持しやすくなります。' : '') + '</span>';
+	}
+	document.getElementById('suggest').innerHTML = html;
+}
+
+// ---- Misc -------------------------------------------------------------------
+document.getElementById('btnClear').onclick = () => { segs.length = 0; cur = { state: cur.state, start: performance.now() }; render(); };
+document.getElementById('btnCsv').onclick = () => {
+	const lines = ['index,numpad,start_ms,duration_ms,drop_rate,drop_rate_with_ac,threshold_ms,hold_ms'];
+	segs.forEach((s, i) => {
+		if (!s.state) return;
+		lines.push([i + 1, NUMPAD[s.state], s.start.toFixed(2), s.dur.toFixed(2), dropRate(s.dur).toFixed(3), acAfter(s.dur, s.state).toFixed(3), thr(), hold()].join(','));
+	});
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+	a.download = 'ac-input-log.csv';
+	a.click();
+};
+window.addEventListener('gamepadconnected', (e) => { if (!hid) setSource(`Gamepad API: ${e.gamepad.id}`); });
+
+// Keyboard fallback for trying the tool without a controller (WASD).
+const keys = new Set();
+const keyState = () => (keys.has('w') ? U : 0) | (keys.has('s') ? D : 0) | (keys.has('a') ? L : 0) | (keys.has('d') ? R : 0);
+window.addEventListener('keydown', (e) => { if ('wasd'.includes(e.key) && !keys.has(e.key)) { keys.add(e.key); if (!srcName) setSource('キーボード (WASD)'); feed(keyState(), e.timeStamp); } });
+window.addEventListener('keyup', (e) => { if (keys.delete(e.key)) feed(keyState(), e.timeStamp); });
+
+render();
+</script>
+</body>
+</html>

@@ -89,4 +89,10 @@ export default {
 		MENU_NAVIGATION_BACK: 'メニュー戻る',
 		MENU_NAVIGATION_TOGGLE: 'メニュートグル',
 	},
+	'profile-accurate-command-label': 'Accurate Command（精密入力）',
+	'profile-accurate-command-global': '全体設定を使う',
+	'profile-accurate-command-off': 'OFF',
+	'profile-accurate-command-on': 'ON（しきい値 {{ms}}ms）',
+	'profile-accurate-command-description':
+		'このプロファイルだけAccurate CommandのON/OFFとしきい値を上書きします。保持時間と支援モードは全体設定に従います。',
 };

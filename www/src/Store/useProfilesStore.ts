@@ -52,6 +52,9 @@ export type PinsType = {
 	invertedPins: number[];
 	socdModeOverride: boolean;
 	socdMode: number;
+	accurateCommandOverride: boolean;
+	accurateCommandEnabled: boolean;
+	accurateCommandThreshold: number;
 };
 
 export const getProfilePins = (profile: PinsType) =>
@@ -62,6 +65,9 @@ export const getProfilePins = (profile: PinsType) =>
 		'invertedPins',
 		'socdModeOverride',
 		'socdMode',
+		'accurateCommandOverride',
+		'accurateCommandEnabled',
+		'accurateCommandThreshold',
 	]);
 
 type State = {
@@ -84,6 +90,8 @@ type Actions = {
 	setProfilePin: SetProfilePinType;
 	setPinInversionEnabled: (profileIndex: number, enabled: boolean) => void;
 	setProfileSOCDMode: (profileIndex: number, socdMode: number) => void;
+	/** value: -1 = use global, 0 = OFF, 1-16 = ON with that threshold (ms) */
+	setProfileAccurateCommand: (profileIndex: number, value: number) => void;
 	togglePinInverted: (profileIndex: number, pin: number) => void;
 	toggleProfileEnabled: (profileIndex: number) => void;
 };
@@ -171,6 +179,24 @@ const useProfilesStore = create<State & Actions>()((set, get) => ({
 			profiles[profileIndex] = {
 				...profiles[profileIndex],
 				pinInversionEnabled,
+			};
+			return { profiles };
+		}),
+	setProfileAccurateCommand: (profileIndex, value) =>
+		set((state) => {
+			const profiles = [...state.profiles];
+			const current = profiles[profileIndex];
+			profiles[profileIndex] = {
+				...current,
+				accurateCommandOverride: value >= 0,
+				accurateCommandEnabled:
+					value > 0
+						? true
+						: value === 0
+							? false
+							: current.accurateCommandEnabled,
+				accurateCommandThreshold:
+					value > 0 ? value : current.accurateCommandThreshold,
 			};
 			return { profiles };
 		}),

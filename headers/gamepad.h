@@ -13,6 +13,7 @@
 #include "pico/stdlib.h"
 
 #include "config.pb.h"
+#include "accuratecommand.h"
 
 // MUST BE DEFINED FOR MPG
 extern uint32_t getMillis();
@@ -137,6 +138,10 @@ public:
 	inline bool __attribute__((always_inline)) pressedE12()   { return pressedButton(GAMEPAD_MASK_E12); }
 
 	const GamepadOptions& getOptions() const { return options; }
+	/** Accurate Command engine (exposed for debug counters / display). */
+	const AccurateCommand& getAccurateCommand() const { return accurateCommand; }
+	/** Re-read Accurate Command settings (global + active profile override). */
+	void configureAccurateCommand();
 	const DpadMode getActiveDpadMode() { return activeDpadMode; }
 
 	void setInputMode(InputMode inputMode);
@@ -235,6 +240,7 @@ public:
 	SOCDMode getStoredSOCDMode() const;
 
 private:
+	AccurateCommand accurateCommand;
 	void processHotkeyAction(GamepadHotkey action);
 	uint8_t runConfiguredSOCDCleaner(uint8_t dpad);
 	void updateStoredSOCDMode();

@@ -132,6 +132,23 @@
     #define DEFAULT_DEBOUNCE_DELAY 5
 #endif
 
+// Accurate Command defaults (BoardConfig.h may override)
+#ifndef DEFAULT_ACCURATE_COMMAND_ENABLED
+    #define DEFAULT_ACCURATE_COMMAND_ENABLED 1
+#endif
+#ifndef DEFAULT_ACCURATE_COMMAND_THRESHOLD
+    #define DEFAULT_ACCURATE_COMMAND_THRESHOLD 9   // ms
+#endif
+#ifndef DEFAULT_ACCURATE_COMMAND_HOLD_TIME
+    #define DEFAULT_ACCURATE_COMMAND_HOLD_TIME 18  // ms: 16.7ms (60fps) + 1ms USB poll, rounded up
+#endif
+#ifndef DEFAULT_HADOKEN_ASSIST_ENABLED
+    #define DEFAULT_HADOKEN_ASSIST_ENABLED 0
+#endif
+#ifndef DEFAULT_SHORYUKEN_ASSIST_ENABLED
+    #define DEFAULT_SHORYUKEN_ASSIST_ENABLED 0
+#endif
+
 #ifndef DEFAULT_PS4_REPORTHACK
     #define DEFAULT_PS4_REPORTHACK false
 #endif
@@ -500,6 +517,11 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.gamepadOptions, profileNumber, 1);
     INIT_UNSET_PROPERTY(config.gamepadOptions, ps4ControllerType, DEFAULT_PS4CONTROLLER_TYPE);
     INIT_UNSET_PROPERTY(config.gamepadOptions, debounceDelay, DEFAULT_DEBOUNCE_DELAY);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandEnabled, !!DEFAULT_ACCURATE_COMMAND_ENABLED);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThreshold, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandHoldTime, DEFAULT_ACCURATE_COMMAND_HOLD_TIME);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, hadokenAssistEnabled, !!DEFAULT_HADOKEN_ASSIST_ENABLED);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, shoryukenAssistEnabled, !!DEFAULT_SHORYUKEN_ASSIST_ENABLED);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB1, DEFAULT_INPUT_MODE_B1);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB2, DEFAULT_INPUT_MODE_B2);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB3, DEFAULT_INPUT_MODE_B3);
@@ -660,6 +682,9 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     initPinInversion(config.gpioMappings);
     INIT_UNSET_PROPERTY(config.gpioMappings, socdModeOverride, false);
     INIT_UNSET_PROPERTY(config.gpioMappings, socdMode, DEFAULT_SOCD_MODE);
+    INIT_UNSET_PROPERTY(config.gpioMappings, accurateCommandOverride, false);
+    INIT_UNSET_PROPERTY(config.gpioMappings, accurateCommandEnabled, !!DEFAULT_ACCURATE_COMMAND_ENABLED);
+    INIT_UNSET_PROPERTY(config.gpioMappings, accurateCommandThreshold, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
     INIT_UNSET_PROPERTY(config.gpioMappings, keyboardButtonMask, DEFAULT_KEYBOARD_BUTTON_MASK);
 
     for (GpioMappings& profile : config.profileOptions.gpioMappingsSets) {
@@ -674,6 +699,9 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
         initPinInversion(profile);
         INIT_UNSET_PROPERTY(profile, socdModeOverride, false);
         INIT_UNSET_PROPERTY(profile, socdMode, DEFAULT_SOCD_MODE);
+        INIT_UNSET_PROPERTY(profile, accurateCommandOverride, false);
+        INIT_UNSET_PROPERTY(profile, accurateCommandEnabled, !!DEFAULT_ACCURATE_COMMAND_ENABLED);
+        INIT_UNSET_PROPERTY(profile, accurateCommandThreshold, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
     }
 
     // displayOptions

@@ -96,6 +96,13 @@ message GamepadOptions
     optional bool advancedSOCDEnabled = 67;
     optional bool keyboardInterfaceEnabled = 68;
     optional KeyboardInterfaceXInputMode keyboardInterfaceXInputMode = 69;
+
+    // Accurate Command (short direction hold) + motion assists. See headers/accuratecommand.h
+    optional bool accurateCommandEnabled = 70;
+    optional uint32 accurateCommandThreshold = 71; // ms, 1-16
+    optional uint32 accurateCommandHoldTime = 72;  // ms, 10-50 (18 = one 60fps frame + 1ms USB poll)
+    optional bool hadokenAssistEnabled = 73;
+    optional bool shoryukenAssistEnabled = 74;
 }
 
 message KeyboardMapping
@@ -241,6 +248,10 @@ message GpioMappings
     optional bool socdModeOverride = 7;
     optional SOCDMode socdMode = 8;
     optional uint32 keyboardButtonMask = 9;
+    // Per-profile Accurate Command override (same pattern as socdModeOverride)
+    optional bool accurateCommandOverride = 10;
+    optional bool accurateCommandEnabled = 11;
+    optional uint32 accurateCommandThreshold = 12; // ms, 1-16
 }
 
 

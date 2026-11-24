@@ -1020,6 +1020,19 @@ const schema = yup.object().shape({
 		.oneOf(AUTHENTICATION_TYPES.map((o) => o.value))
 		.label('X-Input Authentication Type'),
 	debounceDelay: yup.number().required().label('Debounce Delay'),
+	accurateCommandEnabled: yup.number().label('Accurate Command'),
+	accurateCommandThreshold: yup
+		.number()
+		.min(1)
+		.max(16)
+		.label('Accurate Command Threshold'),
+	accurateCommandHoldTime: yup
+		.number()
+		.min(10)
+		.max(50)
+		.label('Accurate Command Hold Time'),
+	hadokenAssistEnabled: yup.number().label('Hadoken Assist'),
+	shoryukenAssistEnabled: yup.number().label('Shoryuken Assist'),
 	miniMenuGamepadInput: yup.number().required().label('Mini Menu'),
 	keyboardInterfaceEnabled: yup.number().required().label('Keyboard Interface'),
 	keyboardInterfaceXInputMode: yup
@@ -1111,6 +1124,16 @@ const FormContext = ({ setButtonLabels, setKeyMappings }) => {
 			values.forcedSetupMode = parseInt(values.forcedSetupMode);
 		if (!!values.lockHotkeys) values.lockHotkeys = parseInt(values.lockHotkeys);
 		if (!!values.fourWayMode) values.fourWayMode = parseInt(values.fourWayMode);
+		[
+			'accurateCommandEnabled',
+			'accurateCommandThreshold',
+			'accurateCommandHoldTime',
+			'hadokenAssistEnabled',
+			'shoryukenAssistEnabled',
+		].forEach((key) => {
+			if (values[key] !== undefined && values[key] !== '')
+				values[key] = parseInt(values[key]);
+		});
 		if (!!values.profileNumber)
 			values.profileNumber = parseInt(values.profileNumber);
 		if (!!values.ps4AuthType) values.ps4AuthType = parseInt(values.ps4AuthType);
@@ -3168,6 +3191,113 @@ export default function SettingsPage() {
 																min={0}
 																max={5000}
 															/>
+														</Col>
+													</Form.Group>
+													{/* Accurate Command: hold short direction inputs until the next 60fps frame */}
+													<Form.Group className="row mb-3">
+														<Form.Label>
+															{t('SettingsPage:accurate-command-header')}
+														</Form.Label>
+														<Col sm={12}>
+															<Form.Check
+																label={t('SettingsPage:accurate-command-enabled-label')}
+																type="switch"
+																id="accurateCommandEnabled"
+																isInvalid={false}
+																checked={Boolean(values.accurateCommandEnabled)}
+																onChange={(e) => {
+																	setFieldValue(
+																		'accurateCommandEnabled',
+																		e.target.checked ? 1 : 0,
+																	);
+																}}
+															/>
+															<Form.Text muted>
+																{t('SettingsPage:accurate-command-description')}
+															</Form.Text>
+														</Col>
+													</Form.Group>
+													<Form.Group className="row mb-3">
+														<Col sm={4}>
+															<Form.Label>
+																{t('SettingsPage:accurate-command-threshold-label')}
+															</Form.Label>
+															<Form.Control
+																type="number"
+																name="accurateCommandThreshold"
+																className="form-control-sm"
+																value={values.accurateCommandThreshold}
+																isInvalid={errors.accurateCommandThreshold}
+																onChange={handleChange}
+																disabled={!values.accurateCommandEnabled}
+																min={1}
+																max={16}
+															/>
+															<Form.Text muted>
+																{t('SettingsPage:accurate-command-threshold-help')}
+															</Form.Text>
+															<Form.Control.Feedback type="invalid">
+																{errors.accurateCommandThreshold}
+															</Form.Control.Feedback>
+														</Col>
+														<Col sm={4}>
+															<Form.Label>
+																{t('SettingsPage:accurate-command-hold-label')}
+															</Form.Label>
+															<Form.Control
+																type="number"
+																name="accurateCommandHoldTime"
+																className="form-control-sm"
+																value={values.accurateCommandHoldTime}
+																isInvalid={errors.accurateCommandHoldTime}
+																onChange={handleChange}
+																min={10}
+																max={50}
+															/>
+															<Form.Text muted>
+																{t('SettingsPage:accurate-command-hold-help')}
+															</Form.Text>
+															<Form.Control.Feedback type="invalid">
+																{errors.accurateCommandHoldTime}
+															</Form.Control.Feedback>
+														</Col>
+													</Form.Group>
+													<Form.Group className="row mb-3">
+														<Col sm={6}>
+															<Form.Check
+																label={t('SettingsPage:hadoken-assist-label')}
+																type="switch"
+																id="hadokenAssistEnabled"
+																isInvalid={false}
+																checked={Boolean(values.hadokenAssistEnabled)}
+																onChange={(e) => {
+																	setFieldValue(
+																		'hadokenAssistEnabled',
+																		e.target.checked ? 1 : 0,
+																	);
+																}}
+															/>
+															<Form.Text muted>
+																{t('SettingsPage:hadoken-assist-help')}
+															</Form.Text>
+														</Col>
+														<Col sm={6}>
+															<Form.Check
+																label={t('SettingsPage:shoryuken-assist-label')}
+																type="switch"
+																id="shoryukenAssistEnabled"
+																isInvalid={false}
+																checked={Boolean(values.shoryukenAssistEnabled)}
+																onChange={(e) => {
+																	setFieldValue(
+																		'shoryukenAssistEnabled',
+																		e.target.checked ? 1 : 0,
+																	);
+																}}
+															/>
+															<Form.Text muted>
+																{t('SettingsPage:shoryuken-assist-help')}
+															</Form.Text>
 														</Col>
 													</Form.Group>
 													<Form.Group className="row mb-5">

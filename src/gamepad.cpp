@@ -39,6 +39,7 @@ void Gamepad::setup()
 	memset(socdModePinMasks, 0, sizeof(socdModePinMasks));
 	updateStoredSOCDMode();
 	activeSOCDMode = resolvedStoredSOCDMode;
+	configureAccurateCommand();
 
 	mapDpadUp       = new GamepadButtonMapping(GAMEPAD_MASK_UP);
 	mapDpadDown     = new GamepadButtonMapping(GAMEPAD_MASK_DOWN);
@@ -315,6 +316,13 @@ void Gamepad::process()
 	// clean up after yourself. nobody likes bad inputs.
 	state.dpad = runConfiguredSOCDCleaner(state.dpad);
 
+	// Accurate Command / motion assists run on the final, SOCD-cleaned 8-way
+	// state and before the D-pad mode conversion, so they work for Digital,
+	// Left Analog and Right Analog modes alike. Attack buttons are not touched.
+	if (accurateCommand.isActive()) {
+		state.dpad = accurateCommand.process(state.dpad, (uint32_t)getMicro());
+	}
+
 	// since analog modes only care about the dpad mode inputs, set the dpad state to digital only dpad values
 	switch (activeDpadMode)
 	{
@@ -484,6 +492,23 @@ void Gamepad::clearRumbleState() {
 	auxState.haptics.leftTrigger.intensity = 0;
 	auxState.haptics.rightTrigger.active = false;
 	auxState.haptics.rightTrigger.intensity = 0;
+}
+
+void Gamepad::configureAccurateCommand() {
+	const GpioMappings& profile = Storage::getInstance().getActiveProfileMappings();
+	AccurateCommandConfig cfg;
+	// A profile can override ON/OFF + threshold; hold time and assists are global.
+	if (profile.accurateCommandOverride) {
+		cfg.acEnabled = profile.accurateCommandEnabled;
+		cfg.thresholdUs = profile.accurateCommandThreshold * 1000;
+	} else {
+		cfg.acEnabled = options.accurateCommandEnabled;
+		cfg.thresholdUs = options.accurateCommandThreshold * 1000;
+	}
+	cfg.holdUs = options.accurateCommandHoldTime * 1000;
+	cfg.hadokenAssist = options.hadokenAssistEnabled;
+	cfg.shoryukenAssist = options.shoryukenAssistEnabled;
+	accurateCommand.configure(cfg); // clamps ranges and resets history
 }
 
 SOCDMode Gamepad::getStoredSOCDMode() const {

@@ -194,6 +194,7 @@ src/main.cpp
 src/gp2040.cpp
 src/gp2040aux.cpp
 src/gamepad.cpp
+src/accuratecommand.cpp
 src/gamepad/GamepadState.cpp
 src/addonmanager.cpp
 src/playerleds.cpp

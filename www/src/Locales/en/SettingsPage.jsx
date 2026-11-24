@@ -76,6 +76,22 @@ export default {
 	'advanced-socd-axis-up-priority': 'Up Priority',
 	'profile-label': 'Profile',
 	'debounce-delay-label': 'Debounce Delay in milliseconds',
+	'accurate-command-header': 'Accurate Command',
+	'accurate-command-enabled-label': 'Enable Accurate Command',
+	'accurate-command-description':
+		'Holds a short direction (e.g. a quick diagonal) that lasted at least the threshold until a 60fps game is guaranteed to read it. Shorter inputs are passed through unchanged. Attack buttons are never delayed.',
+	'accurate-command-threshold-label': 'Threshold (ms)',
+	'accurate-command-threshold-help':
+		'1-16 ms, default 9. Recommended 6-12. Lower = more diagonals saved, but more accidental inputs are held too.',
+	'accurate-command-hold-label': 'Hold Time (ms)',
+	'accurate-command-hold-help':
+		'10-50 ms, default 18 (one 60fps frame + 1 ms USB poll). Also used as the length of assist inserts.',
+	'hadoken-assist-label': 'Hadoken Assist (236/214)',
+	'hadoken-assist-help':
+		'Inserts the down-diagonal for one frame on a direct 2→6, 2→4, 6→2 or 4→2. The following direction is delayed by about 1 frame.',
+	'shoryuken-assist-label': 'Shoryuken Assist (623/421)',
+	'shoryuken-assist-help':
+		'Inserts 2 for one frame on a direct 6→3 or 4→1. The diagonal is delayed by about 1 frame.',
 	'mini-menu-gamepad-input': 'Use Gamepad Input for Display Mini Menu',
 	'ps4-mode-explanation-text':
 		'PS4 mode allows GP2040-CE to run as an authenticated PS4 controller.',

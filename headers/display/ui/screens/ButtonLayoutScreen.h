@@ -190,6 +190,7 @@ class ButtonLayoutScreen : public GPScreen {
         GPSprite* addSprite(uint16_t startX, uint16_t startY, uint16_t sizeX, uint16_t sizeY);
         GPShape* addShape(uint16_t startX, uint16_t startY, uint16_t sizeX, uint16_t sizeY, uint16_t strokeColor, uint16_t fillColor);
         GPWidget* pushElement(GPButtonLayout element);
+        void generateAccurateCommandFooter();
         void generateHeader();
 
         void addCustomHeader(std::string newStr, std::string identifier);

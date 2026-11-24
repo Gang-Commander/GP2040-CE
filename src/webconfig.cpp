@@ -651,6 +651,27 @@ static void writeProfileSOCD(JsonVariant json, const GpioMappings& mappings)
     json["socdMode"] = (int)mappings.socdMode;
 }
 
+// Per-profile Accurate Command override (mirrors readProfileSOCD/writeProfileSOCD)
+static void readProfileAccurateCommand(GpioMappings& mappings, JsonVariantConst json)
+{
+    if (!json["accurateCommandOverride"].isNull())
+        mappings.accurateCommandOverride = json["accurateCommandOverride"];
+    if (!json["accurateCommandEnabled"].isNull())
+        mappings.accurateCommandEnabled = json["accurateCommandEnabled"];
+    if (!json["accurateCommandThreshold"].isNull()) {
+        const int threshold = json["accurateCommandThreshold"];
+        if (threshold >= 1 && threshold <= 16)
+            mappings.accurateCommandThreshold = threshold;
+    }
+}
+
+static void writeProfileAccurateCommand(JsonVariant json, const GpioMappings& mappings)
+{
+    json["accurateCommandOverride"] = mappings.accurateCommandOverride;
+    json["accurateCommandEnabled"] = mappings.accurateCommandEnabled;
+    json["accurateCommandThreshold"] = mappings.accurateCommandThreshold;
+}
+
 std::string setProfileOptions()
 {
     DynamicJsonDocument doc = get_post_data();
@@ -689,6 +710,7 @@ std::string setProfileOptions()
         profileOptions.gpioMappingsSets[altsIndex].enabled = alt["enabled"];
         readInvertedPins(profileOptions.gpioMappingsSets[altsIndex], alt);
         readProfileSOCD(profileOptions.gpioMappingsSets[altsIndex], alt);
+        readProfileAccurateCommand(profileOptions.gpioMappingsSets[altsIndex], alt);
         if (altsIndex >= previousCount) {
             profileOptions.gpioMappingsSets[altsIndex].keyboardMapping = Storage::getInstance().getKeyboardMapping();
             profileOptions.gpioMappingsSets[altsIndex].keyboardButtonMask = coreMappings.keyboardButtonMask;
@@ -780,6 +802,7 @@ std::string getProfileOptions()
         doc["alternativePinMappings"][i]["enabled"] = profileOptions.gpioMappingsSets[i].enabled;
         writeInvertedPins(doc["alternativePinMappings"][i], profileOptions.gpioMappingsSets[i]);
         writeProfileSOCD(doc["alternativePinMappings"][i], profileOptions.gpioMappingsSets[i]);
+        writeProfileAccurateCommand(doc["alternativePinMappings"][i], profileOptions.gpioMappingsSets[i]);
     }
 
     return serialize_json(doc);
@@ -820,6 +843,16 @@ std::string setGamepadOptions()
     readDoc(gamepadOptions.fourWayMode, doc, "fourWayMode");
     readDoc(gamepadOptions.profileNumber, doc, "profileNumber");
     readDoc(gamepadOptions.debounceDelay, doc, "debounceDelay");
+    readDoc(gamepadOptions.accurateCommandEnabled, doc, "accurateCommandEnabled");
+    readDoc(gamepadOptions.accurateCommandThreshold, doc, "accurateCommandThreshold");
+    readDoc(gamepadOptions.accurateCommandHoldTime, doc, "accurateCommandHoldTime");
+    readDoc(gamepadOptions.hadokenAssistEnabled, doc, "hadokenAssistEnabled");
+    readDoc(gamepadOptions.shoryukenAssistEnabled, doc, "shoryukenAssistEnabled");
+    // keep values inside the documented ranges even if the client sends garbage
+    if (gamepadOptions.accurateCommandThreshold < 1) gamepadOptions.accurateCommandThreshold = 1;
+    if (gamepadOptions.accurateCommandThreshold > 16) gamepadOptions.accurateCommandThreshold = 16;
+    if (gamepadOptions.accurateCommandHoldTime < 10) gamepadOptions.accurateCommandHoldTime = 10;
+    if (gamepadOptions.accurateCommandHoldTime > 50) gamepadOptions.accurateCommandHoldTime = 50;
     readDoc(gamepadOptions.inputModeB1, doc, "inputModeB1");
     readDoc(gamepadOptions.inputModeB2, doc, "inputModeB2");
     readDoc(gamepadOptions.inputModeB3, doc, "inputModeB3");
@@ -931,6 +964,11 @@ std::string getGamepadOptions()
     writeDoc(doc, "fourWayMode", gamepadOptions.fourWayMode ? 1 : 0);
     writeDoc(doc, "profileNumber", gamepadOptions.profileNumber);
     writeDoc(doc, "debounceDelay", gamepadOptions.debounceDelay);
+    writeDoc(doc, "accurateCommandEnabled", gamepadOptions.accurateCommandEnabled ? 1 : 0);
+    writeDoc(doc, "accurateCommandThreshold", gamepadOptions.accurateCommandThreshold);
+    writeDoc(doc, "accurateCommandHoldTime", gamepadOptions.accurateCommandHoldTime);
+    writeDoc(doc, "hadokenAssistEnabled", gamepadOptions.hadokenAssistEnabled ? 1 : 0);
+    writeDoc(doc, "shoryukenAssistEnabled", gamepadOptions.shoryukenAssistEnabled ? 1 : 0);
     writeDoc(doc, "inputModeB1", gamepadOptions.inputModeB1);
     writeDoc(doc, "inputModeB2", gamepadOptions.inputModeB2);
     writeDoc(doc, "inputModeB3", gamepadOptions.inputModeB3);
@@ -1695,6 +1733,7 @@ std::string setPinMappings()
     gpioMappings.enabled = doc["enabled"];
     readInvertedPins(gpioMappings, doc.as<JsonVariantConst>());
     readProfileSOCD(gpioMappings, doc.as<JsonVariantConst>());
+    readProfileAccurateCommand(gpioMappings, doc.as<JsonVariantConst>());
 
     EventManager::getInstance().triggerEvent(new GPStorageSaveEvent(true));
 
@@ -1770,6 +1809,7 @@ std::string getPinMappings()
     doc["enabled"] = gpioMappings.enabled;
     writeInvertedPins(doc.as<JsonVariant>(), gpioMappings);
     writeProfileSOCD(doc.as<JsonVariant>(), gpioMappings);
+    writeProfileAccurateCommand(doc.as<JsonVariant>(), gpioMappings);
 
     return serialize_json(doc);
 }

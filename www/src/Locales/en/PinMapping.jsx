@@ -113,4 +113,10 @@ export default {
 		MENU_NAVIGATION_BACK: 'Menu Back',
 		MENU_NAVIGATION_TOGGLE: 'Menu Toggle',
 	},
+	'profile-accurate-command-label': 'Accurate Command',
+	'profile-accurate-command-global': 'Use global setting',
+	'profile-accurate-command-off': 'OFF',
+	'profile-accurate-command-on': 'ON (threshold {{ms}} ms)',
+	'profile-accurate-command-description':
+		'Overrides Accurate Command ON/OFF and threshold for this profile. Hold time and assists use the global setting.',
 };
