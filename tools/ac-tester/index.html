@@ -53,6 +53,10 @@
 	.meter { height: 10px; background: #0e1622; border-radius: 5px; overflow: hidden; position: relative; }
 	.meter > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
 	.meter > b { position: absolute; inset: 0 auto 0 0; background: var(--ok); opacity: .45; }
+	tr.ignored td { opacity: .45; }
+	.prompt { font-size: 22px; font-weight: 700; margin: 4px 0; }
+	.progress { height: 6px; background: #0e1622; border-radius: 3px; overflow: hidden; margin: 6px 0; }
+	.progress > i { display: block; height: 100%; background: var(--accent); }
 	.seq { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; }
 </style>
 </head>
@@ -121,6 +125,7 @@
 			<div class="row" style="margin-top:8px">
 				<span class="muted">受付</span><input type="number" id="window" min="3" max="60"><span class="muted">フレーム（仮の値・変更可）</span>
 			</div>
+			<div class="calib" id="session" style="border-color:var(--accent);margin-top:10px"></div>
 			<div class="cmp" id="cmp" style="margin-top:10px"></div>
 			<div class="muted" style="margin-top:6px">成功率は、ゲームの読み取りタイミング（16.7ms周期）を32通りずらして判定した平均です。青＝計測値、緑＝AC適用後の予測。</div>
 			<div class="tablewrap" style="margin-top:10px">
@@ -459,7 +464,16 @@ function judgeSide(list, attempt, m, win, side) {
 	}
 	return { rate: ok / N, failRuns };
 }
+// Only what happened from the start of this attempt counts; earlier inputs
+// (the release of the previous attempt) are treated as neutral.
+function isolate(list, start) {
+	const i = Math.max(0, list.findIndex((c) => c.t > start) - 1);
+	const out = list.slice(i).map((c) => ({ ...c }));
+	if (out.length && out[0].t < start) out[0].t = start;
+	return [{ t: start - 1000, s: 0 }, ...out];
+}
 function judge(list, attempt) {
+	list = isolate(list, attempt.start);
 	const m = MODES[attempt.mode];
 	const win = winByMode[attempt.mode];
 	const a = judgeSide(list, attempt, m, win, 1), b = judgeSide(list, attempt, m, win, 2);
@@ -505,12 +519,40 @@ function finishAttempt(raw, buttonT, implied = false) {
 	for (let i = 0; i < raw.length; i++) if (raw[i].s === 0 && raw.slice(i + 1).some((c) => c.s !== 0)) lastNeutral = i;
 	const firstDir = lastNeutral >= 0 ? lastNeutral + 1 : raw.findIndex((c) => c.s !== 0);
 	const start = raw[Math.max(0, firstDir)].t;
-	attempts.push({ mode, raw, start, button: buttonT, implied });
-	if (attempts.length > 500) attempts.shift();
+	const at = { mode, raw, start, button: buttonT, implied };
+	at.ignored = noiseReason(at, buttonT - lastAttemptEnd);
+	attempts.push(at);
+	if (attempts.length > 800) attempts.shift();
 	attemptStart = null;
 	lastAttemptEnd = buttonT;
 	armed = false; // wait for neutral before the next fallback attempt
+	sessionOnAttempt(at);
 	scheduleRender();
+}
+
+// ---- Noise filter -----------------------------------------------------------
+// Releasing the fingers after a command creates short leftover states (8, 9, 2…)
+// and sometimes a second button edge. Those are not attempts:
+//  - a button press within 150 ms of the previous attempt ("連続押し")
+//  - an input that does not contain enough of the selected motion, in order,
+//    in either facing ("コマンド外"). A real but sloppy try such as 2→6 for 236
+//    still counts (2 of 3 elements), so genuine misses are kept.
+function motionCoverage(states, preds) {
+	// longest ordered subsequence of preds matched by distinct runs (LCS)
+	const n = states.length, m = preds.length;
+	const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+	for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
+		dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1] + (preds[j - 1](states[i - 1]) ? 1 : 0));
+	return dp[n][m];
+}
+function noiseReason(at, sincePrev) {
+	if (sincePrev < 150) return '連続押し';
+	const runs = [];
+	for (const c of at.raw) if (c.t >= at.start && c.s !== 0 && runs[runs.length - 1] !== c.s) runs.push(c.s);
+	const preds = MOTION[MODES[at.mode].motion];
+	const need = preds.length >= 6 ? 4 : 2;
+	const cov = Math.max(motionCoverage(runs, preds), motionCoverage(runs.map(mirror), preds));
+	return cov >= need ? '' : 'コマンド外';
 }
 
 // ============================================================================
@@ -544,7 +586,7 @@ const acCfg = () => ({ ac: true, thr: thr(), hold: hold(), perState: { ...perSta
 function renderModes() {
 	document.getElementById('modes').innerHTML = Object.entries(MODES).map(([k, m]) =>
 		`<button data-mode="${k}" class="${k === mode ? 'on' : ''}">${m.label}</button>`).join('');
-	document.querySelectorAll('#modes button').forEach((b) => (b.onclick = () => { mode = b.dataset.mode; renderModes(); scheduleRender(); }));
+	document.querySelectorAll('#modes button').forEach((b) => (b.onclick = () => { if (session.state === 'running') return; mode = b.dataset.mode; renderModes(); scheduleRender(); }));
 	document.getElementById('modeHelp').textContent = MODES[mode].help;
 	windowEl.value = winByMode[mode];
 }
@@ -556,6 +598,7 @@ renderModes();
 // ============================================================================
 const dropRate = (d) => Math.max(0, 1 - d / FRAME_MS);
 const pct = (x) => Math.round(x * 100) + '%';
+const sideName = (sd) => (sd === 1 ? '1P側（右向き）' : '2P側（左向き）');
 const cls = (x) => (x >= 0.5 ? 'bad' : x > 0 ? 'warn' : 'ok');
 const clsOk = (x) => (x >= 0.95 ? 'ok' : x >= 0.5 ? 'warn' : 'bad');
 const acAfter = (d, s) => (s && d >= thrFor(s) && d < hold() ? 0 : dropRate(d));
@@ -587,6 +630,7 @@ function renderCommands() {
 	const rows = [];
 	const agg = { 1: { n: 0, r: 0, a: 0 }, 2: { n: 0, r: 0, a: 0 } };
 	list.forEach((at) => {
+		if (at.ignored) return;
 		const j = judged(at);
 		const g = agg[j.raw.side]; g.n++; g.r += j.raw.rate; g.a += j.ac ? j.ac.rate : j.raw.rate;
 	});
@@ -596,6 +640,11 @@ function renderCommands() {
 		const sideLabel = j.raw.side === 1 ? '1P' : '2P';
 		const fail = j.raw.rate < 1 && j.raw.failRuns ? j.raw.failRuns.filter((s, i, arr) => s !== 0 || (i > 0 && i < arr.length - 1)).map((s) => NUMPAD[j.raw.side === 2 ? mirror(s) : s]).join('') : '';
 		const shape = at.mode === 'easySho' || at.mode === 'sho' ? shapeOf(at.raw.filter((c) => c.t >= at.start)) : '';
+		if (at.ignored) {
+			rows.push(`<tr class="ignored"><td>${idx}</td><td class="l">-</td><td class="l seq">${seqOf(at.raw, at.start)}</td><td>${(at.button - at.start).toFixed(0)}ms</td>` +
+				`<td colspan="3" class="l muted">除外（${at.ignored}）</td></tr>`);
+			continue;
+		}
 		rows.push(`<tr><td>${idx}</td><td class="l">${sideLabel}</td><td class="l seq">${seqOf(at.raw, at.start)}${shape ? ` <span class="tag">${shape}</span>` : ''}${at.implied ? ' <span class="muted">(ボタン無し)</span>' : ''}</td>` +
 			`<td>${(at.button - at.start).toFixed(0)}ms</td><td class="${clsOk(j.raw.rate)}">${pct(j.raw.rate)}</td>` +
 			`<td class="${j.ac ? clsOk(j.ac.rate) : ''}">${j.ac ? pct(j.ac.rate) : '-'}</td><td class="l seq muted">${fail}</td></tr>`);
@@ -660,7 +709,159 @@ function renderStats(list) {
 	document.getElementById('suggest').innerHTML = html;
 }
 
-function render() { renderPending = false; renderHistory(); renderCommands(); }
+function render() { renderPending = false; renderHistory(); renderCommands(); renderSession(); }
+
+// ============================================================================
+// Diagnosis session: guided attempts → recommended settings
+// ============================================================================
+const session = { state: 'idle', plan: [], step: 0, msg: '', result: null, picks: Object.keys(MODES), n: 10, both: true };
+function sessionStart() {
+	session.plan = [];
+	for (const k of session.picks) for (const sd of session.both ? [1, 2] : [1]) session.plan.push({ mode: k, side: sd, done: 0 });
+	if (!session.plan.length) return;
+	session.state = 'running'; session.step = 0; session.msg = ''; session.result = null; session.id = Date.now();
+	deviceAcEl.checked = false;
+	setMode(session.plan[0].mode);
+}
+function setMode(k) { mode = k; renderModes(); scheduleRender(); }
+function sessionOnAttempt(at) {
+	if (session.state !== 'running') return;
+	const st = session.plan[session.step];
+	if (at.mode !== st.mode) return;
+	if (at.ignored) { session.msg = `前回の入力は除外しました（${at.ignored}）。`; return; }
+	const j = judge(at.raw, at);
+	if (j.side !== st.side) { at.ignored = '向きが違う'; session.msg = `前回の入力は${sideName(j.side)}として判定されました。${sideName(st.side)}で入力してください。`; return; }
+	at.session = session.id;
+	st.done++;
+	session.msg = `前回: 成功率 ${pct(j.rate)}`;
+	if (st.done >= session.n) sessionNext();
+}
+function sessionNext() {
+	session.step++;
+	session.msg = '';
+	if (session.step < session.plan.length) { setMode(session.plan[session.step].mode); return; }
+	session.state = 'computing';
+	scheduleRender();
+	setTimeout(() => { session.result = recommend(attempts.filter((a) => a.session === session.id && !a.ignored)); session.state = 'done'; scheduleRender(); }, 50);
+}
+
+// Mean success of the session attempts under one AC configuration (null = AC off).
+function evaluate(list, cfg) {
+	const by = {};
+	let sum = 0;
+	for (const at of list) {
+		const lo = at.start - 50, hi = at.button + 20;
+		const src = isolate(at.raw, at.start).filter((c) => c.t <= hi);
+		const r = cfg ? judgeSideFixed(applyAC(src.filter((c, i) => i === 0 || c.t >= lo), cfg), at) : judgeSideFixed(src, at);
+		sum += r;
+		const key = `${at.mode}|${at.sideFixed}`;
+		(by[key] ??= { n: 0, s: 0 }); by[key].n++; by[key].s += r;
+	}
+	return { mean: list.length ? sum / list.length : 0, by };
+}
+// Judge with the side fixed to the one the session asked for.
+function judgeSideFixed(list, at) {
+	const m = MODES[at.mode];
+	return judgeSide(isolate(list, at.start), at, m, winByMode[at.mode], at.sideFixed).rate;
+}
+function recommend(list) {
+	list.forEach((at) => (at.sideFixed = judge(at.raw, at).side));
+	const h = hold();
+	const base = (t, per = {}, extra = {}) => ({ ac: true, thr: t, hold: h, perState: per, hado: false, sho: false, ...extra });
+	const off = evaluate(list, null);
+	const def = evaluate(list, base(9));
+	// 1) global threshold: best success, then the highest (least aggressive) threshold within 0.5 points
+	const byT = [];
+	for (let t = 1; t <= 16; t++) byT[t] = evaluate(list, base(t)).mean;
+	const bestT = Math.max(...byT.slice(1));
+	let T = 1;
+	for (let t = 16; t >= 1; t--) if (byT[t] >= bestT - 0.005) { T = t; break; }
+	// 2) per-direction refinement — only for directions that actually showed
+	//    up as short (< hold) inputs at least 3 times in this session; a value
+	//    for a direction with no data would be a guess.
+	const shortCount = {};
+	for (const at of list) {
+		const r = isolate(at.raw, at.start).filter((c) => c.t <= at.button);
+		for (let i = 1; i < r.length - 1; i++) if (r[i].s && r[i + 1].t - r[i].t < h) shortCount[r[i].s] = (shortCount[r[i].s] || 0) + 1;
+	}
+	const per = {};
+	let cur = evaluate(list, base(T)).mean;
+	for (const st of [D|R, D|L, U|R, U|L, D, R, L].filter((x) => (shortCount[x] || 0) >= 3)) {
+		const means = [];
+		for (let v = 1; v <= 16; v++) means[v] = evaluate(list, base(T, { ...per, [st]: v })).mean;
+		const mx = Math.max(...means.slice(1));
+		let pick = T;
+		for (let v = 16; v >= 1; v--) if (means[v] >= mx - 0.005) { pick = v; break; }
+		if (pick !== T && means[pick] >= cur - 0.001) { per[st] = pick; cur = means[pick]; }
+	}
+	const rec = evaluate(list, base(T, per));
+	// 3) assists: only suggested when they clearly help (+3 points)
+	const hadoGain = evaluate(list, base(T, per, { hado: true })).mean - rec.mean;
+	const shoGain = evaluate(list, base(T, per, { sho: true })).mean - rec.mean;
+	return { n: list.length, off, def, rec, T, per, hadoGain, shoGain, byT };
+}
+function applyRecommendation() {
+	const r = session.result;
+	thrEl.value = r.T; thrEl.oninput();
+	perDirEl.checked = Object.keys(r.per).length > 0;
+	syncPerDir();
+	for (const el of dirInputs) if (r.per[+el.dataset.s]) el.value = r.per[+el.dataset.s];
+	readPerDir();
+	document.getElementById('perDirBox').open = perDirEl.checked;
+	scheduleRender();
+}
+
+function renderSession() {
+	const box = document.getElementById('session');
+	if (session.state === 'idle') {
+		box.innerHTML = `<div class="big">おまかせ診断</div>
+			<div class="muted">決まった回数だけコマンドを入力すると、結果を集計して最適なACの設定を提案します。<b>本体のACはOFF</b>にして行ってください。</div>
+			<div class="row" style="margin-top:8px">${Object.entries(MODES).map(([k, m]) => `<label><input type="checkbox" data-pick="${k}" ${session.picks.includes(k) ? 'checked' : ''}> ${m.label}</label>`).join('')}</div>
+			<div class="row"><span class="muted">各</span><input type="number" id="sessN" min="3" max="50" value="${session.n}"><span class="muted">回</span>
+			<label><input type="checkbox" id="sessBoth" ${session.both ? 'checked' : ''}> 1P側と2P側の両方</label>
+			<button class="primary" id="sessStart">診断を始める</button></div>`;
+		box.querySelectorAll('[data-pick]').forEach((el) => (el.onchange = () => { session.picks = [...box.querySelectorAll('[data-pick]:checked')].map((e) => e.dataset.pick); }));
+		box.querySelector('#sessN').oninput = (e) => (session.n = Math.min(50, Math.max(3, +e.target.value || 10)));
+		box.querySelector('#sessBoth').onchange = (e) => (session.both = e.target.checked);
+		box.querySelector('#sessStart').onclick = () => { sessionStart(); scheduleRender(); };
+		return;
+	}
+	if (session.state === 'running') {
+		const st = session.plan[session.step];
+		const total = session.plan.length * session.n, doneAll = session.plan.slice(0, session.step).length * session.n + st.done;
+		box.innerHTML = `<div class="muted">おまかせ診断　ステップ ${session.step + 1} / ${session.plan.length}</div>
+			<div class="prompt">${sideName(st.side)}で <span style="color:var(--accent)">${MODES[st.mode].label}</span> を入力</div>
+			<div class="muted">${MODES[st.mode].help}　あと ${session.n - st.done} 回</div>
+			<div class="progress"><i style="width:${(doneAll / total) * 100}%"></i></div>
+			<div class="row"><span class="${session.msg.startsWith('前回の') ? 'warn' : 'muted'}">${session.msg}</span></div>
+			<div class="row"><button id="sessSkip">このステップを飛ばす</button><button id="sessStop">中止</button></div>`;
+		box.querySelector('#sessSkip').onclick = () => sessionNext();
+		box.querySelector('#sessStop').onclick = () => { session.state = 'idle'; scheduleRender(); };
+		return;
+	}
+	if (session.state === 'computing') { box.innerHTML = '<div class="big">集計中…</div><div class="muted">しきい値1〜16msと方向ごとの値を総当たりで試しています。</div>'; return; }
+	const r = session.result;
+	if (!r || !r.n) { box.innerHTML = '<div class="big">有効な入力がありませんでした</div><button id="sessAgain">もう一度</button>'; box.querySelector('#sessAgain').onclick = () => { session.state = 'idle'; scheduleRender(); }; return; }
+	const rows = session.plan.map((p) => {
+		const key = `${p.mode}|${p.side}`, f = (e) => (e.by[key] ? e.by[key].s / e.by[key].n : null);
+		const cell = (x) => (x === null ? '<td>-</td>' : `<td class="${clsOk(x)}">${pct(x)}</td>`);
+		return `<tr><td class="l">${MODES[p.mode].label}</td><td class="l">${p.side === 1 ? '1P' : '2P'}</td>${cell(f(r.off))}${cell(f(r.def))}${cell(f(r.rec))}</tr>`;
+	}).join('');
+	const perTxt = Object.entries(r.per).map(([st, v]) => `${ARROW[st]} ${v}ms`).join(' / ');
+	const assist = [];
+	if (r.hadoGain >= 0.03) assist.push(`波動拳支援をONにすると、さらに +${Math.round(r.hadoGain * 100)}ポイント（前歩きが約1F遅れる副作用あり）`);
+	if (r.shoGain >= 0.03) assist.push(`昇竜拳支援をONにすると、さらに +${Math.round(r.shoGain * 100)}ポイント（6→3が約1F遅れる副作用あり）`);
+	box.innerHTML = `<div class="big">診断結果（有効 ${r.n} 回）</div>
+		<div style="margin:6px 0">推奨しきい値: <b class="big" style="color:var(--accent)">${r.T}ms</b>${perTxt ? `<br>方向ごと（詳細設定）: <b>${perTxt}</b>` : '<br><span class="muted">方向ごとの調整は不要です（詳細設定はOFFのままで最適）。</span>'}</div>
+		<table style="margin:6px 0"><thead><tr><th class="l">コマンド</th><th class="l">側</th><th>AC OFF</th><th>AC 初期値（9ms）</th><th>推奨設定</th></tr></thead><tbody>${rows}
+		<tr><td class="l"><b>全体</b></td><td></td><td class="${clsOk(r.off.mean)}">${pct(r.off.mean)}</td><td class="${clsOk(r.def.mean)}">${pct(r.def.mean)}</td><td class="${clsOk(r.rec.mean)}"><b>${pct(r.rec.mean)}</b></td></tr></tbody></table>
+		${assist.length ? `<div class="muted">${assist.join('<br>')}</div>` : '<div class="muted">波動拳支援・昇竜拳支援は、この結果では効果が小さいのでOFFのままを推奨します。</div>'}
+		<div class="muted" style="margin-top:6px">成功率が同じなら、なるべく大きいしきい値を選んでいます。小さいしきい値ほど、意図しない一瞬の入力まで保持してしまうためです。保持時間は現在の値（${hold()}ms）で計算しています。</div>
+		<div class="row" style="margin-top:8px"><button class="primary" id="sessApply">推奨値をプレビューに反映</button><button id="sessAgain">もう一度診断する</button></div>
+		<div class="muted">本体に反映するには、Web設定画面の「しきい値」${perTxt ? 'と「詳細設定」' : ''}に同じ値を入れて保存してください。</div>`;
+	box.querySelector('#sessApply').onclick = applyRecommendation;
+	box.querySelector('#sessAgain').onclick = () => { session.state = 'idle'; scheduleRender(); };
+}
 
 // ============================================================================
 // Misc
