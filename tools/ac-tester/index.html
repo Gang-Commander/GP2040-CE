@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AC 入力履歴テスター</title>
+<title>AC 入力テスター（トレーニングモード）</title>
 <style>
 	:root {
 		--bg: #0e1622; --panel: #152131; --line: #24344a; --text: #dbe6f3; --muted: #8296ad;
@@ -54,6 +54,12 @@
 	.meter > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
 	.meter > b { position: absolute; inset: 0 auto 0 0; background: var(--ok); opacity: .45; }
 	tr.ignored td { opacity: .45; }
+	.gamewrap { display: grid; grid-template-columns: 1fr 110px; gap: 8px; margin-top: 6px; }
+	#game { width: 100%; border-radius: 8px; display: block; }
+	.inputlog { background: #0b111a; border-radius: 8px; padding: 6px 8px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.35; overflow: hidden; max-height: 300px; }
+	.inputlog .n { display: inline-block; width: 22px; text-align: right; color: var(--muted); }
+	.inputlog .a { font-size: 15px; }
+	.inputlog b { color: var(--warn); }
 	.prompt { font-size: 22px; font-weight: 700; margin: 4px 0; }
 	.progress { height: 6px; background: #0e1622; border-radius: 3px; overflow: hidden; margin: 6px 0; }
 	.progress > i { display: block; height: 100%; background: var(--accent); }
@@ -63,8 +69,8 @@
 <body>
 <header>
 	<div>
-		<h1>AC 入力履歴テスター</h1>
-		<div class="muted">方向入力ごとの持続時間と、スト6のコマンド成功率（60fpsの読み取りを再現）を記録します。</div>
+		<h1>AC 入力テスター</h1>
+		<div class="muted">スト6風のトレーニングモードで技が出るかを確かめながら、方向入力の長さとACの効果を測ります。</div>
 	</div>
 	<div class="row">
 		<button id="btnClear">クリア</button>
@@ -119,18 +125,35 @@
 
 	<section>
 		<div class="panel">
-			<h2>コマンド練習（スト6）</h2>
-			<div class="modes" id="modes"></div>
-			<div class="muted" id="modeHelp" style="margin-top:6px"></div>
-			<div class="row" style="margin-top:8px">
-				<span class="muted">受付</span><input type="number" id="window" min="3" max="60"><span class="muted">フレーム（仮の値・変更可）</span>
+			<h2>トレーニングモード（スト6風）</h2>
+			<div class="row">
+				<span class="muted">位置</span>
+				<button id="side1">1P側（右向き）</button><button id="side2">2P側（左向き）</button>
+				<label style="margin-left:8px"><input type="checkbox" id="acLive"> ACプレビュー（本体のACと同じ処理をブラウザで再現）</label>
+			</div>
+			<div class="row"><span class="muted">お題</span><span class="modes" id="targets"></span></div>
+			<div class="gamewrap">
+				<canvas id="game" width="860" height="300"></canvas>
+				<div class="inputlog" id="inputLog"></div>
 			</div>
 			<div class="calib" id="session" style="border-color:var(--accent);margin-top:10px"></div>
-			<div class="cmp" id="cmp" style="margin-top:10px"></div>
-			<div class="muted" style="margin-top:6px">成功率は、ゲームの読み取りタイミング（16.7ms周期）を32通りずらして判定した平均です。青＝計測値、緑＝AC適用後の予測。</div>
-			<div class="tablewrap" style="margin-top:10px">
+			<table style="margin-top:10px">
+				<thead><tr><th class="l">お題</th><th class="l">側</th><th>回数</th><th>実際に出た</th><th>理論値（AC OFF）</th><th>AC適用後の予測</th></tr></thead>
+				<tbody id="tstats"></tbody>
+			</table>
+			<div class="muted" style="margin-top:6px">「実際に出た」はこの画面のゲームで技が出た割合です。「理論値」は同じ入力を、読み取りタイミングを32通りずらして再生したときの平均です。運の要素を除いた実力値として見てください。</div>
+			<details style="margin-top:8px">
+				<summary>受付フレーム（判定の猶予）</summary>
+				<div class="row" style="margin-top:6px" id="winInputs"></div>
+				<div class="muted">波動系の11Fは公開されている調査値です。昇竜・真空波動は仮の値です。実際のスト6と感覚が違うときに調整してください。</div>
+			</details>
+		</div>
+
+		<div class="panel">
+			<h2>試行の記録（新しい順）</h2>
+			<div class="tablewrap">
 				<table>
-					<thead><tr><th>#</th><th class="l">側</th><th class="l">実際の入力</th><th>所要</th><th>成功率</th><th>AC適用後</th><th class="l">失敗したときの読まれ方</th></tr></thead>
+					<thead><tr><th>#</th><th class="l">お題</th><th class="l">側</th><th class="l">入力</th><th class="l">出た技</th><th>理論値</th><th>AC予測</th></tr></thead>
 					<tbody id="attempts"></tbody>
 				</table>
 			</div>
@@ -148,10 +171,9 @@
 
 		<details class="panel">
 			<summary>判定の仕組みと前提</summary>
+			<p class="muted"><b>ゲームの動き</b>: 入力を16.7msごと（60fps）に読み取り、攻撃ボタンを押したフレームで、直前の入力履歴から技を判定します。優先順位は真空波動拳 → 昇竜拳 → 波動拳 / 竜巻旋風脚 → 通常技です。技の最中に押したボタンは無視します（試行に数えません）。</p>
+			<p class="muted"><b>スト6の判定ルール（このツールの再現）</b>: 昇竜は「前を含む方向 → 下を含む方向 → 前を含む方向」が順に並べば成立（623 / 323 / 636 / 626 / 639）。333のように同じ方向が続くだけでは不成立。波動は 2 → 3 → 6 が順に必要（26は不成立）。竜巻は 2 → 1 → 4。真空波動は波動2回。前歩きからの波動は昇竜に化けます。本物のスト6と完全に同じである保証はありません。</p>
 			<p class="muted"><b>読み落とし率</b>: 持続時間 d ms の入力が16.7msごとの読み取りに一度も重ならない確率で、max(0, 1 − d / 16.7) です（例: 6ms → 64%）。</p>
-			<p class="muted"><b>コマンド成功率</b>: 攻撃ボタンを押した時刻を含むフレームから、受付フレーム数だけさかのぼった読み取り結果に、コマンドが順番どおり含まれるかを判定します。読み取りの位相を32通りずらした平均です。攻撃ボタンを押さなかった場合は、最後の方向を押してから20ms後に押したとみなします。</p>
-			<p class="muted"><b>スト6の判定ルール（このツールの前提）</b>: 昇竜は「前を含む方向 → 下を含む方向 → 前を含む方向」が順に並べば成立（623 / 323 / 636 / 626 / 639）。333のように同じ方向が続くだけでは不成立。波動は 2 → 3 → 6 が順に必要（26は不成立）。竜巻は 2 → 1 → 4。真空波動は波動2回。波動の判定で昇竜も成立している場合は、昇竜に化けたとして失敗に数えます。受付フレーム数は波動系11Fが公開されている調査値で、他は仮の値です。</p>
-			<p class="muted"><b>左右</b>: 1P側（右向き）と2P側（左向き）は、入力がどちら向きのコマンドとして成立したかで自動で振り分けます。</p>
 		</details>
 	</section>
 </main>
@@ -182,17 +204,10 @@ const segs = [];               // closed direction segments {state, start, end, 
 let cur = { state: 0, start: performance.now() };
 const changes = [{ t: cur.start, s: 0 }]; // raw timeline of direction changes
 let srcName = '';
-let attemptStart = null;
-let armed = true;
-let lastAttemptEnd = -Infinity;
 
 function feed(state, t) {
 	state = socdNeutral(state);
 	if (state === cur.state) return;
-	// No-button fallback: arm only when a motion starts from neutral, and not
-	// for the releases that follow an attack press.
-	if (cur.state === 0) armed = true;
-	if (attemptStart === null && armed && cur.state === 0 && state !== 0) attemptStart = t;
 	segs.push({ state: cur.state, start: cur.start, end: t, dur: t - cur.start });
 	if (segs.length > 3000) segs.shift();
 	changes.push({ t, s: state });
@@ -204,7 +219,7 @@ function feed(state, t) {
 
 let buttonDown = false;
 function feedButton(pressed, t) {
-	if (pressed && !buttonDown) onAttackPressed(t);
+	if (pressed && !buttonDown) pendingPresses.push(t); // consumed by the game loop on its frame
 	buttonDown = pressed;
 }
 
@@ -406,10 +421,10 @@ function applyAC(list, cfg) {
 }
 
 // ============================================================================
-// SF6 command judging
+// SF6-style move detection (shared by the live game and the replay analysis)
 // ============================================================================
-// Element predicates are written for a character facing RIGHT (1P side);
-// the 2P side is judged on the mirrored input.
+// Element predicates are written for a character facing RIGHT; a character
+// facing left is judged on the mirrored input.
 const hasF = (s) => (s & R) && !(s & L);
 const hasDn = (s) => (s & D) !== 0;
 const is = (x) => (s) => s === x;
@@ -425,136 +440,335 @@ function matches(runs, preds) {
 	for (const s of runs) { if (k < preds.length && preds[k](s)) k++; }
 	return k === preds.length;
 }
-const MODES = {
-	hado:   { label: '波動（236）', motion: 'qcf', win: 11, endsForward: true, help: '2 → 3 → 6 + 攻撃。昇竜に化けたら失敗として数えます。' },
-	sho:    { label: '昇竜（623）', motion: 'dp',  win: 11, endsForward: true, help: '6 → 2 → 3 + 攻撃。' },
-	easySho:{ label: '簡易昇竜（323 / 636）', motion: 'dp', win: 11, endsForward: true, help: '323 または 636 + 攻撃。判定は昇竜と同じで、使った形を表示します。' },
-	sa:     { label: '真空波動（236236）', motion: 'sa', win: 20, endsForward: true, help: '236236 + 攻撃。受付フレームは仮の値です。' },
-	tatsu:  { label: '竜巻（214）', motion: 'qcb', win: 11, endsForward: false, help: '2 → 1 → 4 + 攻撃。' },
-};
-let mode = 'hado';
-const windowEl = document.getElementById('window');
-const winByMode = Object.fromEntries(Object.entries(MODES).map(([k, m]) => [k, m.win]));
+const runsOf = (frames) => { const r = []; for (const s of frames) if (!r.length || r[r.length - 1] !== s) r.push(s); return r; };
 
-// Frames the game sees for one phase: state at each 60 fps sample.
-function sampleRuns(list, tStart, tButton, phase, win) {
-	// Button is read on the first sample at or after it was pressed.
-	const k0 = Math.ceil((tButton - phase) / FRAME_MS);
+const MOVES = {
+	sa:     { label: '真空波動拳', motion: 'sa',  frames: 100 },
+	dp:     { label: '昇竜拳',     motion: 'dp',  frames: 50 },
+	hado:   { label: '波動拳',     motion: 'qcf', frames: 45 },
+	tatsu:  { label: '竜巻旋風脚', motion: 'qcb', frames: 50 },
+	normal: { label: '通常技',     frames: 18 },
+};
+const PRIORITY = ['sa', 'dp', 'hado', 'tatsu'];
+const winByMove = { sa: 20, dp: 11, hado: 11, tatsu: 11 };
+// frames: oldest → newest, in facing-right space. The newest frame is the button frame.
+function detectMove(frames) {
+	for (const k of PRIORITY) if (matches(runsOf(frames.slice(-winByMove[k])), MOTION[MOVES[k].motion])) return k;
+	return 'normal';
+}
+
+const TARGETS = {
+	hado:    { label: '波動拳（236）', move: 'hado' },
+	sho:     { label: '昇竜拳（623）', move: 'dp' },
+	easySho: { label: '簡易昇竜（323 / 636）', move: 'dp' },
+	sa:      { label: '真空波動拳（236236）', move: 'sa' },
+	tatsu:   { label: '竜巻旋風脚（214）', move: 'tatsu' },
+};
+let target = 'hado';
+
+// ---- Replay analysis (luck removed: average over 32 frame phases) ------------
+function sampleFrames(list, tButton, phase, count) {
+	const k0 = Math.ceil((tButton - phase) / FRAME_MS); // button is read on the first frame at/after the press
 	const frames = [];
 	let i = 0;
-	for (let k = k0 - win + 1; k <= k0; k++) {
-		const t = phase + k * FRAME_MS - 1; // −1 ms: the host has the report from the previous USB poll
+	for (let k = k0 - count + 1; k <= k0; k++) {
+		const t = phase + k * FRAME_MS - 1; // −1 ms: the host has the previous USB poll's report
 		while (i + 1 < list.length && list[i + 1].t <= t) i++;
 		frames.push(list[i].t <= t ? list[i].s : 0);
 	}
-	const runs = [];
-	for (const s of frames) if (!runs.length || runs[runs.length - 1] !== s) runs.push(s);
-	return runs;
+	return frames;
 }
-function judgeSide(list, attempt, m, win, side) {
-	const L2 = side === 2 ? list.map((c) => ({ t: c.t, s: mirror(c.s) })) : list;
-	const N = 32;
-	let ok = 0, failRuns = null;
-	for (let p = 0; p < N; p++) {
-		const phase = (p / N) * FRAME_MS;
-		const runs = sampleRuns(L2, attempt.start, attempt.button, phase, win);
-		let good = matches(runs, MOTION[m.motion]);
-		if (good && m.motion === 'qcf' && matches(runs, MOTION.dp)) good = false; // turned into a DP
-		if (good) ok++; else if (!failRuns) failRuns = runs;
-	}
-	return { rate: ok / N, failRuns };
-}
-// Only what happened from the start of this attempt counts; earlier inputs
-// (the release of the previous attempt) are treated as neutral.
+// Inputs before the attempt (the previous attempt's release) count as neutral.
 function isolate(list, start) {
 	const i = Math.max(0, list.findIndex((c) => c.t > start) - 1);
 	const out = list.slice(i).map((c) => ({ ...c }));
 	if (out.length && out[0].t < start) out[0].t = start;
 	return [{ t: start - 1000, s: 0 }, ...out];
 }
-function judge(list, attempt) {
-	list = isolate(list, attempt.start);
-	const m = MODES[attempt.mode];
-	const win = winByMode[attempt.mode];
-	const a = judgeSide(list, attempt, m, win, 1), b = judgeSide(list, attempt, m, win, 2);
-	let side;
-	if (a.rate !== b.rate) side = a.rate > b.rate ? 1 : 2;
-	else {
-		// Neither (or both) side succeeded: decide by the last horizontal direction.
-		const lastH = [...attempt.raw].reverse().find((c) => c.s & (L|R));
-		const right = lastH ? (lastH.s & R) !== 0 : true;
-		side = (right === m.endsForward) ? 1 : 2;
-	}
-	return { side, ...(side === 1 ? a : b) };
+function replayRate(at, cfg) {
+	let list = isolate(at.raw, at.start).filter((c) => c.t <= at.button + 20);
+	if (cfg) list = applyAC(list, cfg);
+	if (at.side === 2) list = list.map((c) => ({ t: c.t, s: mirror(c.s) }));
+	const want = TARGETS[at.target].move, N = 32;
+	let ok = 0;
+	for (let p = 0; p < N; p++) if (detectMove(sampleFrames(list, at.button, (p / N) * FRAME_MS, 30)) === want) ok++;
+	return ok / N;
 }
 
-// Attempts: a run of direction activity ended by an attack button
-// (or, without a button, by 250 ms of neutral).
+// ============================================================================
+// Live game: 60 fps loop over the recorded input timeline
+// ============================================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const GROUND = 255, BASE_X = { 1: 200, 2: 660 };
+const game = {
+	side: 1, history: [], anim: null, busy: 0, xoff: 0, projectiles: [], sparks: [],
+	popup: null, flash: 0, dummyHit: 0, log: [], dir: 0, walk: 0,
+};
 const attempts = [];
-function onAttackPressed(t) {
-	// Look back at most 1 s, and never into the previous attempt.
-	const raw = changesSince(Math.max(t - 1000, lastAttemptEnd + 1)).filter((c) => c.t <= t);
-	if (!raw.some((c) => c.s !== 0)) return;
-	finishAttempt(raw, t);
+let lastPress = -Infinity;
+let pendingPresses = [];
+const LAG_MS = 12;            // let late gamepad samples arrive before a frame is read
+let gameT0 = performance.now(), gameFrame = 0, lastFt = gameT0;
+let acEng = null;
+const acLiveEl = document.getElementById('acLive');
+
+function rawAt(t) {
+	let lo = 0, hi = changes.length - 1;
+	if (t < changes[0].t) return 0;
+	while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (changes[mid].t <= t) lo = mid; else hi = mid - 1; }
+	return changes[lo].s;
 }
-setInterval(() => {
-	// no-button fallback: neutral for 250 ms after some directions
+function changesBetween(a, b) { return changes.filter((c) => c.t > a && c.t <= b); }
+function resetAcLive() { acEng = new ACEngine(acCfg()); }
+
+function stepFrames() {
 	const now = performance.now();
-	if (cur.state !== 0 || now - cur.start < 250) return;
-	if (attemptStart === null) return;
-	const raw = changesSince(Math.max(attemptStart - 50, lastAttemptEnd + 1)).filter((c) => c.t <= cur.start);
-	const last = [...raw].reverse().find((c) => c.s !== 0);
-	if (last) finishAttempt(raw, last.t + 20, true);
-	attemptStart = null;
-}, 50);
+	if (now - lastFt > 1000) { gameFrame = Math.floor((now - LAG_MS - gameT0) / FRAME_MS); lastFt = gameT0 + gameFrame * FRAME_MS; pendingPresses = []; }
+	while (gameT0 + (gameFrame + 1) * FRAME_MS <= now - LAG_MS) {
+		gameFrame++;
+		const ft = gameT0 + gameFrame * FRAME_MS;
+		let dir;
+		if (acLiveEl.checked && !deviceAcEl.checked) {
+			if (!acEng) resetAcLive();
+			for (const c of changesBetween(lastFt, ft)) acEng.process(c.s, c.t);
+			dir = acEng.process(rawAt(ft), ft);
+		} else dir = rawAt(ft - 1);
+		const presses = pendingPresses.filter((t) => t <= ft);
+		pendingPresses = pendingPresses.filter((t) => t > ft);
+		gameStep(dir, presses.length ? presses[0] : null);
+		lastFt = ft;
+	}
+}
+
+function gameStep(dir, pressT) {
+	game.dir = dir;
+	const local = game.side === 1 ? dir : mirror(dir);
+	game.history.push(local);
+	if (game.history.length > 120) game.history.shift();
+	// SF6-like input log: direction + frames held + button mark
+	const top = game.log[0];
+	if (top && top.s === dir && !(pressT !== null && top.btn)) top.n++; else game.log.unshift({ s: dir, n: 1, btn: false });
+	if (pressT !== null) game.log[0].btn = true;
+	if (game.log.length > 20) game.log.pop();
+
+	updateAnim();
+	if (pressT === null) return;
+	if (game.busy > 0) { recordAttempt(pressT, null); return; } // pressed during a move: ignored, like the real game
+	const mv = detectMove(game.history);
+	startMove(mv);
+	recordAttempt(pressT, mv);
+}
+
+function startMove(mv) {
+	game.anim = { mv, f: 0 };
+	game.busy = MOVES[mv].frames;
+	const ok = TARGETS[target].move === mv;
+	game.popup = { text: MOVES[mv].label + (ok ? '' : (mv === 'normal' ? '' : '')), ok, f: 0 };
+	if (mv === 'sa') game.flash = 30;
+}
+
+function updateAnim() {
+	const fc = game.side === 1 ? 1 : -1;
+	if (game.anim) {
+		const a = game.anim;
+		a.f++;
+		if (a.mv === 'hado' && a.f === 12) game.projectiles.push({ x: BASE_X[game.side] + game.xoff + 45 * fc, y: GROUND - 62, vx: 8 * fc, r: 13, big: false, hits: 1 });
+		if (a.mv === 'sa' && a.f === 34) game.projectiles.push({ x: BASE_X[game.side] + 50 * fc, y: GROUND - 62, vx: 7 * fc, r: 30, big: true, hits: 5 });
+		if (a.mv === 'tatsu' && a.f > 6 && a.f < 42) game.xoff += 2.6 * fc;
+		if (a.mv === 'dp' && a.f > 5 && a.f < 28) game.xoff += 1.2 * fc;
+		if (--game.busy <= 0) game.anim = null;
+	} else if (Math.abs(game.xoff) > 0.5) game.xoff *= 0.8; else game.xoff = 0;
+	const dummyX = BASE_X[game.side === 1 ? 2 : 1];
+	for (const p of game.projectiles) {
+		p.x += p.vx;
+		if (Math.abs(p.x - dummyX) < p.r + 10) {
+			game.sparks.push({ x: dummyX - 12 * fc, y: p.y + (Math.random() - 0.5) * 30, f: 0 });
+			game.dummyHit = 12;
+			p.hits--;
+			p.vx *= p.hits > 0 ? 0.15 : 1;
+			if (p.hits > 0) p.x -= p.vx * 2; // multi-hit: stay on the dummy
+		}
+	}
+	game.projectiles = game.projectiles.filter((p) => p.hits > 0 && p.x > -60 && p.x < canvas.width + 60);
+	game.sparks.forEach((s) => s.f++);
+	game.sparks = game.sparks.filter((s) => s.f < 14);
+	if (game.dummyHit > 0) game.dummyHit--;
+	if (game.flash > 0) game.flash--;
+	if (game.popup && ++game.popup.f > 60) game.popup = null;
+	game.walk++;
+}
+
+function recordAttempt(pressT, mv) {
+	const start = Math.max(pressT - 1000, lastPress + 1);
+	const at = {
+		target, side: game.side, move: mv, ok: mv !== null && TARGETS[target].move === mv,
+		raw: changesSince(start).filter((c) => c.t <= pressT + 25), start, button: pressT, busy: mv === null,
+	};
+	attempts.push(at);
+	if (attempts.length > 800) attempts.shift();
+	if (!at.busy) lastPress = pressT;
+	sessionOnAttempt(at);
+	scheduleRender();
+}
 function changesSince(t) {
 	let i = changes.length - 1;
 	while (i > 0 && changes[i].t > t) i--;
 	return changes.slice(i).map((c, j) => (j === 0 ? { t, s: c.s } : c));
 }
-function finishAttempt(raw, buttonT, implied = false) {
-	// The motion starts after the last neutral before the button (or at the
-	// first direction if there is none, e.g. 323 from a held crouch).
-	let lastNeutral = -1;
-	for (let i = 0; i < raw.length; i++) if (raw[i].s === 0 && raw.slice(i + 1).some((c) => c.s !== 0)) lastNeutral = i;
-	const firstDir = lastNeutral >= 0 ? lastNeutral + 1 : raw.findIndex((c) => c.s !== 0);
-	const start = raw[Math.max(0, firstDir)].t;
-	const at = { mode, raw, start, button: buttonT, implied };
-	at.ignored = noiseReason(at, buttonT - lastAttemptEnd);
-	attempts.push(at);
-	if (attempts.length > 800) attempts.shift();
-	attemptStart = null;
-	lastAttemptEnd = buttonT;
-	armed = false; // wait for neutral before the next fallback attempt
-	sessionOnAttempt(at);
-	scheduleRender();
+
+// ---- Drawing -------------------------------------------------------------
+// Angles are absolute, measured from straight down, positive = toward facing.
+const P = (a) => [Math.sin(a), Math.cos(a)];
+function limb(x, y, a1, a2, l1, l2) {
+	const [s1, c1] = P(a1), [s2, c2] = P(a2);
+	const ex = x + s1 * l1, ey = y + c1 * l1;
+	ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.lineTo(ex + s2 * l2, ey + c2 * l2); ctx.stroke();
+	return ey + c2 * l2 - y;
+}
+function drawFigure(x, facing, p, color) {
+	const drop = Math.max(26 * Math.cos(p.legF[0]) + 26 * Math.cos(p.legF[1]), 26 * Math.cos(p.legB[0]) + 26 * Math.cos(p.legB[1]));
+	const hipY = GROUND - drop - (p.lift || 0);
+	ctx.save();
+	ctx.translate(x, hipY);
+	ctx.scale(facing, 1);
+	if (p.rot) ctx.rotate(p.rot);
+	ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+	const lean = p.lean || 0, sx = Math.sin(lean) * 40, sy = -Math.cos(lean) * 40;
+	ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(sx, sy); ctx.stroke();
+	ctx.beginPath(); ctx.arc(sx + Math.sin(lean) * 13, sy - Math.cos(lean) * 13, 10, 0, Math.PI * 2); ctx.fill();
+	limb(sx, sy + 4, p.armB[0], p.armB[1], 22, 20);
+	limb(0, 0, p.legB[0], p.legB[1], 26, 26);
+	limb(0, 0, p.legF[0], p.legF[1], 26, 26);
+	limb(sx, sy + 4, p.armF[0], p.armF[1], 22, 20);
+	ctx.restore();
+}
+const POSE_IDLE = { armF: [0.9, 2.6], armB: [0.5, 2.8], legF: [0.35, 0.12], legB: [-0.35, -0.1], lean: 0.05 };
+const POSE_CROUCH = { armF: [1.1, 2.6], armB: [0.7, 2.8], legF: [1.35, -0.15], legB: [0.35, -0.95], lean: 0.25 };
+function poseFor() {
+	const a = game.anim, d = game.side === 1 ? game.dir : mirror(game.dir);
+	if (!a) {
+		if (d & D) return POSE_CROUCH;
+		const w = Math.sin(game.walk * 0.3) * 0.45;
+		if (d & R) return { ...POSE_IDLE, lean: 0.14, legF: [0.35 + w, 0.1 + w], legB: [-0.35 - w, -0.1 - w] };
+		if (d & L) return { ...POSE_IDLE, lean: -0.1, legF: [0.35 - w, 0.1 - w], legB: [-0.35 + w, -0.1 + w] };
+		return POSE_IDLE;
+	}
+	const f = a.f;
+	switch (a.mv) {
+		case 'normal': return f >= 2 && f <= 10 ? { ...POSE_IDLE, armF: [1.57, 1.57], lean: 0.15 } : POSE_IDLE;
+		case 'hado':
+		case 'sa': {
+			const t0 = a.mv === 'sa' ? 30 : 10;
+			const stance = { legF: [0.6, 0.35], legB: [-0.6, -0.3] };
+			if (f < t0) return { ...stance, armF: [-0.5, 0.4], armB: [-0.6, 0.3], lean: -0.1 };
+			return { ...stance, armF: [1.52, 1.57], armB: [1.4, 1.5], lean: 0.18 };
+		}
+		case 'dp': {
+			if (f < 5) return POSE_CROUCH;
+			const up = f < 28;
+			const k = up ? Math.sin(((f - 5) / 23) * Math.PI / 2) : Math.max(0, 1 - (f - 28) / 18);
+			return { armF: up ? [3.05, 3.1] : [2.4, 2.9], armB: [0.6, 1.6], legF: [1.3, -0.3], legB: [0.3, 0.2], lean: -0.05, lift: 130 * k };
+		}
+		case 'tatsu': {
+			if (f < 6) return { ...POSE_IDLE, lift: 3 * f };
+			if (f < 42) return { armF: [1.57, 1.57], armB: [-1.57, -1.57], legF: [1.57, 1.57], legB: [-0.2, -0.4], lift: 38, rot: 0, spin: (f - 6) * 0.5 };
+			return { ...POSE_IDLE, lift: Math.max(0, 38 - (f - 42) * 5) };
+		}
+	}
+	return POSE_IDLE;
 }
 
-// ---- Noise filter -----------------------------------------------------------
-// Releasing the fingers after a command creates short leftover states (8, 9, 2…)
-// and sometimes a second button edge. Those are not attempts:
-//  - a button press within 150 ms of the previous attempt ("連続押し")
-//  - an input that does not contain enough of the selected motion, in order,
-//    in either facing ("コマンド外"). A real but sloppy try such as 2→6 for 236
-//    still counts (2 of 3 elements), so genuine misses are kept.
-function motionCoverage(states, preds) {
-	// longest ordered subsequence of preds matched by distinct runs (LCS)
-	const n = states.length, m = preds.length;
-	const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-	for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
-		dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1] + (preds[j - 1](states[i - 1]) ? 1 : 0));
-	return dp[n][m];
-}
-function noiseReason(at, sincePrev) {
-	if (sincePrev < 150) return '連続押し';
-	const runs = [];
-	for (const c of at.raw) if (c.t >= at.start && c.s !== 0 && runs[runs.length - 1] !== c.s) runs.push(c.s);
-	const preds = MOTION[MODES[at.mode].motion];
-	const need = preds.length >= 6 ? 4 : 2;
-	const cov = Math.max(motionCoverage(runs, preds), motionCoverage(runs.map(mirror), preds));
-	return cov >= need ? '' : 'コマンド外';
+function draw() {
+	stepFrames();
+	const W = canvas.width, H = canvas.height, fc = game.side === 1 ? 1 : -1;
+	ctx.clearRect(0, 0, W, H);
+	ctx.fillStyle = '#0b111a'; ctx.fillRect(0, 0, W, H);
+	// training-stage grid
+	ctx.strokeStyle = '#17263a'; ctx.lineWidth = 1;
+	for (let x = 0; x < W; x += 43) { ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x, GROUND); ctx.stroke(); }
+	ctx.strokeStyle = '#3a5272'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, GROUND + 1); ctx.lineTo(W, GROUND + 1); ctx.stroke();
+
+	// dummy
+	const dSide = game.side === 1 ? 2 : 1;
+	const shake = game.dummyHit ? (game.dummyHit % 4 < 2 ? 4 : -4) : 0;
+	drawFigure(BASE_X[dSide] + shake, -fc, game.dummyHit ? { ...POSE_IDLE, lean: -0.3 } : POSE_IDLE, '#5b6b80');
+
+	// player
+	const p = poseFor();
+	const px = BASE_X[game.side] + game.xoff;
+	if (game.anim && game.anim.mv === 'sa' && game.anim.f < 30) {
+		ctx.fillStyle = `rgba(255,170,60,${0.15 + 0.1 * Math.sin(game.anim.f)})`;
+		ctx.beginPath(); ctx.arc(px, GROUND - 60, 55 + (game.anim.f % 6), 0, Math.PI * 2); ctx.fill();
+	}
+	if (p.spin !== undefined) {
+		// tatsu: spin by alternating facing + rotating the kicking leg
+		const flip = Math.cos(p.spin) >= 0 ? 1 : -1;
+		drawFigure(px, fc * flip, p, '#4cc3ff');
+		ctx.strokeStyle = 'rgba(76,195,255,.35)'; ctx.lineWidth = 3;
+		ctx.beginPath(); ctx.ellipse(px, GROUND - 90, 58, 10, 0, 0, Math.PI * 2); ctx.stroke();
+	} else drawFigure(px, fc, p, '#4cc3ff');
+	if (game.anim && game.anim.mv === 'dp' && game.anim.f > 5 && game.anim.f < 28) {
+		ctx.fillStyle = 'rgba(255,220,120,.5)';
+		ctx.beginPath(); ctx.arc(px + 6 * fc, GROUND - 160 - p.lift + 40, 9, 0, Math.PI * 2); ctx.fill();
+	}
+
+	// projectiles
+	for (const pr of game.projectiles) {
+		const g = ctx.createRadialGradient(pr.x, pr.y, 2, pr.x, pr.y, pr.r);
+		g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, pr.big ? '#ffb547' : '#7fd6ff'); g.addColorStop(1, pr.big ? 'rgba(255,91,110,0)' : 'rgba(76,195,255,0)');
+		ctx.fillStyle = g;
+		ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r, 0, Math.PI * 2); ctx.fill();
+		ctx.beginPath(); ctx.ellipse(pr.x - pr.vx * 2.5, pr.y, pr.r * 1.4, pr.r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+	}
+	for (const s of game.sparks) {
+		ctx.strokeStyle = `rgba(255,230,150,${1 - s.f / 14})`; ctx.lineWidth = 3;
+		for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + s.f * 0.1, r1 = 4 + s.f, r2 = 10 + s.f * 2; ctx.beginPath(); ctx.moveTo(s.x + Math.cos(a) * r1, s.y + Math.sin(a) * r1); ctx.lineTo(s.x + Math.cos(a) * r2, s.y + Math.sin(a) * r2); ctx.stroke(); }
+	}
+	if (game.flash > 0) {
+		ctx.fillStyle = `rgba(0,0,0,${0.5 * game.flash / 30})`; ctx.fillRect(0, 0, W, H);
+		ctx.fillStyle = '#ffb547'; ctx.font = 'bold 34px system-ui'; ctx.textAlign = 'center';
+		ctx.fillText('SUPER ART', W / 2, 120);
+	}
+
+	// HUD
+	ctx.textAlign = 'left'; ctx.font = '600 15px system-ui'; ctx.fillStyle = '#8296ad';
+	const st = session.state === 'running' ? session.plan[session.step] : null;
+	ctx.fillText(`お題: ${TARGETS[target].label}　${game.side === 1 ? '1P側' : '2P側'}${st ? `　あと${session.n - st.done}回` : ''}`, 14, 24);
+	const mine = attempts.filter((a) => !a.busy && a.target === target && a.side === game.side);
+	ctx.textAlign = 'right';
+	ctx.fillText(`○ ${mine.filter((a) => a.ok).length}　× ${mine.filter((a) => !a.ok).length}`, W - 14, 24);
+	if (game.popup) {
+		const pp = game.popup, a = Math.min(1, (60 - pp.f) / 20);
+		ctx.textAlign = 'center'; ctx.font = 'bold 30px system-ui';
+		ctx.fillStyle = pp.ok ? `rgba(95,211,163,${a})` : `rgba(255,91,110,${a})`;
+		ctx.fillText((pp.ok ? '○ ' : '× ') + pp.text, W / 2, 70 - pp.f * 0.3);
+	}
+
+	// SF6-like input log
+	document.getElementById('inputLog').innerHTML = game.log.map((e) =>
+		`<div><span class="n">${e.n > 99 ? 99 : e.n}</span> <span class="a">${e.s ? ARROW[e.s] : '・'}</span>${e.btn ? ' <b>P</b>' : ''}</div>`).join('');
+	requestAnimationFrame(draw);
 }
 
+// ---- Side & target controls -------------------------------------------------
+function setSide(sd) {
+	game.side = sd; game.xoff = 0; game.projectiles = []; game.anim = null; game.busy = 0;
+	document.getElementById('side1').className = sd === 1 ? 'on' : '';
+	document.getElementById('side2').className = sd === 2 ? 'on' : '';
+}
+document.getElementById('side1').onclick = () => { if (session.state !== 'running') setSide(1); };
+document.getElementById('side2').onclick = () => { if (session.state !== 'running') setSide(2); };
+function renderTargets() {
+	document.getElementById('targets').innerHTML = Object.entries(TARGETS).map(([k, t]) =>
+		`<button data-target="${k}" class="${k === target ? 'on' : ''}">${t.label}</button>`).join('');
+	document.querySelectorAll('#targets button').forEach((b) => (b.onclick = () => { if (session.state === 'running') return; target = b.dataset.target; renderTargets(); scheduleRender(); }));
+}
+function setTarget(k) { target = k; renderTargets(); }
+document.getElementById('winInputs').innerHTML = PRIORITY.map((k) =>
+	`<label class="muted">${MOVES[k].label} <input type="number" min="3" max="60" data-win="${k}" value="${winByMove[k]}">F</label>`).join('');
+document.querySelectorAll('[data-win]').forEach((el) => (el.oninput = () => { winByMove[el.dataset.win] = Math.min(60, Math.max(3, +el.value || 11)); scheduleRender(); }));
+acLiveEl.onchange = () => { resetAcLive(); };
 // ============================================================================
 // Settings UI
 // ============================================================================
@@ -574,25 +788,14 @@ function syncPerDir() {
 function readPerDir() {
 	for (const el of dirInputs) perState[+el.dataset.s] = perDirEl.checked ? Math.min(16, Math.max(1, +el.value || thr())) : 0;
 }
-perDirEl.onchange = syncPerDir;
-dirInputs.forEach((el) => (el.oninput = () => { readPerDir(); scheduleRender(); }));
-thrEl.oninput = () => { document.getElementById('thrVal').textContent = thr() + 'ms'; if (!perDirEl.checked) syncPerDir(); scheduleRender(); };
-holdEl.oninput = () => { document.getElementById('holdVal').textContent = hold() + 'ms'; scheduleRender(); };
+perDirEl.onchange = () => { syncPerDir(); if (typeof resetAcLive === 'function') resetAcLive(); };
+dirInputs.forEach((el) => (el.oninput = () => { readPerDir(); resetAcLive(); scheduleRender(); }));
+thrEl.oninput = () => { document.getElementById('thrVal').textContent = thr() + 'ms'; if (!perDirEl.checked) syncPerDir(); resetAcLive(); scheduleRender(); };
+holdEl.oninput = () => { document.getElementById('holdVal').textContent = hold() + 'ms'; resetAcLive(); scheduleRender(); };
 deviceAcEl.onchange = scheduleRender;
 syncPerDir();
 const thrFor = (s) => perState[s] || thr();
 const acCfg = () => ({ ac: true, thr: thr(), hold: hold(), perState: { ...perState }, hado: false, sho: false });
-
-function renderModes() {
-	document.getElementById('modes').innerHTML = Object.entries(MODES).map(([k, m]) =>
-		`<button data-mode="${k}" class="${k === mode ? 'on' : ''}">${m.label}</button>`).join('');
-	document.querySelectorAll('#modes button').forEach((b) => (b.onclick = () => { if (session.state === 'running') return; mode = b.dataset.mode; renderModes(); scheduleRender(); }));
-	document.getElementById('modeHelp').textContent = MODES[mode].help;
-	windowEl.value = winByMode[mode];
-}
-windowEl.oninput = () => { winByMode[mode] = Math.min(60, Math.max(3, +windowEl.value || MODES[mode].win)); scheduleRender(); };
-renderModes();
-
 // ============================================================================
 // Rendering
 // ============================================================================
@@ -613,49 +816,194 @@ function shapeOf(raw) {
 	return '';
 }
 
-const judgeCache = new WeakMap();
-function judged(at) {
-	const key = `${thr()}|${hold()}|${JSON.stringify(perState)}|${winByMode[at.mode]}|${deviceAcEl.checked}`;
-	const c = judgeCache.get(at);
+// ---- Attempt table & per-target stats ---------------------------------------
+const replayCache = new WeakMap();
+function replayed(at) {
+	const key = `${thr()}|${hold()}|${JSON.stringify(perState)}|${JSON.stringify(winByMove)}|${deviceAcEl.checked}`;
+	const c = replayCache.get(at);
 	if (c && c.key === key) return c.v;
-	const raw = judge(at.raw, at);
-	const ac = deviceAcEl.checked ? null : judge(applyAC(at.raw, acCfg()), at);
-	const v = { raw, ac };
-	judgeCache.set(at, { key, v });
+	const v = { off: replayRate(at, null), ac: deviceAcEl.checked ? null : replayRate(at, acCfg()) };
+	replayCache.set(at, { key, v });
 	return v;
 }
-
-function renderCommands() {
-	const list = attempts.filter((a) => a.mode === mode);
+function renderAttempts() {
 	const rows = [];
-	const agg = { 1: { n: 0, r: 0, a: 0 }, 2: { n: 0, r: 0, a: 0 } };
-	list.forEach((at) => {
-		if (at.ignored) return;
-		const j = judged(at);
-		const g = agg[j.raw.side]; g.n++; g.r += j.raw.rate; g.a += j.ac ? j.ac.rate : j.raw.rate;
-	});
-	for (const at of list.slice(-150).reverse()) {
-		const j = judged(at);
-		const idx = attempts.indexOf(at) + 1;
-		const sideLabel = j.raw.side === 1 ? '1P' : '2P';
-		const fail = j.raw.rate < 1 && j.raw.failRuns ? j.raw.failRuns.filter((s, i, arr) => s !== 0 || (i > 0 && i < arr.length - 1)).map((s) => NUMPAD[j.raw.side === 2 ? mirror(s) : s]).join('') : '';
-		const shape = at.mode === 'easySho' || at.mode === 'sho' ? shapeOf(at.raw.filter((c) => c.t >= at.start)) : '';
-		if (at.ignored) {
-			rows.push(`<tr class="ignored"><td>${idx}</td><td class="l">-</td><td class="l seq">${seqOf(at.raw, at.start)}</td><td>${(at.button - at.start).toFixed(0)}ms</td>` +
-				`<td colspan="3" class="l muted">除外（${at.ignored}）</td></tr>`);
+	const list = attempts.slice(-150);
+	for (let i = list.length - 1; i >= 0; i--) {
+		const at = list[i], idx = attempts.indexOf(at) + 1;
+		const seq = seqOf(at.raw, at.start);
+		if (at.busy) {
+			rows.push(`<tr class="ignored"><td>${idx}</td><td class="l">${TARGETS[at.target].label}</td><td class="l">${at.side}P</td><td class="l seq">${seq}</td><td colspan="3" class="l muted">技の最中のボタン（数えない）</td></tr>`);
 			continue;
 		}
-		rows.push(`<tr><td>${idx}</td><td class="l">${sideLabel}</td><td class="l seq">${seqOf(at.raw, at.start)}${shape ? ` <span class="tag">${shape}</span>` : ''}${at.implied ? ' <span class="muted">(ボタン無し)</span>' : ''}</td>` +
-			`<td>${(at.button - at.start).toFixed(0)}ms</td><td class="${clsOk(j.raw.rate)}">${pct(j.raw.rate)}</td>` +
-			`<td class="${j.ac ? clsOk(j.ac.rate) : ''}">${j.ac ? pct(j.ac.rate) : '-'}</td><td class="l seq muted">${fail}</td></tr>`);
+		const r = replayed(at);
+		const shape = at.target === 'easySho' || at.target === 'sho' ? shapeOf(at.raw.filter((c) => c.t >= at.start).map((c) => ({ ...c, s: at.side === 2 ? mirror(c.s) : c.s }))) : '';
+		rows.push(`<tr><td>${idx}</td><td class="l">${TARGETS[at.target].label}</td><td class="l">${at.side}P</td><td class="l seq">${seq}${shape ? ` <span class="tag">${shape}</span>` : ''}</td>` +
+			`<td class="l ${at.ok ? 'ok' : 'bad'}">${at.ok ? '○' : '×'} ${MOVES[at.move].label}</td>` +
+			`<td class="${clsOk(r.off)}">${pct(r.off)}</td><td class="${r.ac === null ? '' : clsOk(r.ac)}">${r.ac === null ? '-' : pct(r.ac)}</td></tr>`);
 	}
-	document.getElementById('attempts').innerHTML = rows.join('') || '<tr><td colspan="7" class="l muted">コマンドを入力してください。</td></tr>';
-	const bar = (g) => g.n ? `<div><div class="meter"><b style="width:${(g.a / g.n) * 100}%"></b><i style="width:${(g.r / g.n) * 100}%"></i></div>` +
-		`<span class="${clsOk(g.r / g.n)}">${pct(g.r / g.n)}</span>${deviceAcEl.checked ? '' : ` → <span class="${clsOk(g.a / g.n)}">${pct(g.a / g.n)}</span>`} <span class="muted">(${g.n}回)</span></div>` : '<div class="muted">まだ記録なし</div>';
-	document.getElementById('cmp').innerHTML = `<div></div><div class="h">1P側（右向き）</div><div class="h">2P側（左向き）</div>` +
-		`<div>${MODES[mode].label}</div>${bar(agg[1])}${bar(agg[2])}`;
+	document.getElementById('attempts').innerHTML = rows.join('') || '<tr><td colspan="7" class="l muted">お題の技を、攻撃ボタン（キーボードならJ）つきで出してください。</td></tr>';
+
+	const groups = {};
+	for (const at of attempts) {
+		if (at.busy) continue;
+		const g = (groups[`${at.target}|${at.side}`] ??= { target: at.target, side: at.side, n: 0, ok: 0, off: 0, ac: 0 });
+		const r = replayed(at);
+		g.n++; g.ok += at.ok ? 1 : 0; g.off += r.off; g.ac += r.ac ?? r.off;
+	}
+	const gs = Object.values(groups).sort((a, b) => a.target.localeCompare(b.target) || a.side - b.side);
+	document.getElementById('tstats').innerHTML = gs.map((g) =>
+		`<tr><td class="l">${TARGETS[g.target].label}</td><td class="l">${g.side}P</td><td>${g.n}</td>` +
+		`<td class="${clsOk(g.ok / g.n)}">${pct(g.ok / g.n)}</td><td class="${clsOk(g.off / g.n)}">${pct(g.off / g.n)}</td>` +
+		`<td class="${deviceAcEl.checked ? '' : clsOk(g.ac / g.n)}">${deviceAcEl.checked ? '-' : pct(g.ac / g.n)}</td></tr>`).join('') ||
+		'<tr><td colspan="6" class="l muted">まだ記録がありません。</td></tr>';
 }
 
+// ============================================================================
+// Diagnosis session: prompted attempts in the training mode → recommended settings
+// ============================================================================
+const session = { state: 'idle', plan: [], step: 0, msg: '', result: null, picks: Object.keys(TARGETS), n: 10, both: true };
+function sessionStart() {
+	session.plan = [];
+	for (const k of session.picks) for (const sd of session.both ? [1, 2] : [1]) session.plan.push({ target: k, side: sd, done: 0 });
+	if (!session.plan.length) return;
+	session.state = 'running'; session.step = 0; session.msg = ''; session.result = null; session.id = Date.now();
+	deviceAcEl.checked = false; acLiveEl.checked = false;
+	enterStep();
+}
+function enterStep() {
+	const st = session.plan[session.step];
+	setTarget(st.target); setSide(st.side);
+	scheduleRender();
+}
+function sessionOnAttempt(at) {
+	if (session.state !== 'running' || at.busy) return;
+	const st = session.plan[session.step];
+	at.session = session.id;
+	st.done++;
+	session.msg = at.ok ? `○ ${MOVES[at.move].label}` : `× ${MOVES[at.move].label}が出ました`;
+	if (st.done >= session.n) sessionNext();
+}
+function sessionNext() {
+	session.step++;
+	session.msg = '';
+	if (session.step < session.plan.length) { enterStep(); return; }
+	session.state = 'computing';
+	scheduleRender();
+	setTimeout(() => { session.result = recommend(attempts.filter((a) => a.session === session.id && !a.busy)); session.state = 'done'; scheduleRender(); }, 50);
+}
+function evaluate(list, cfg) {
+	const by = {};
+	let sum = 0;
+	for (const at of list) {
+		const r = replayRate(at, cfg);
+		sum += r;
+		const key = `${at.target}|${at.side}`;
+		(by[key] ??= { n: 0, s: 0 }); by[key].n++; by[key].s += r;
+	}
+	return { mean: list.length ? sum / list.length : 0, by };
+}
+function recommend(list) {
+	const h = hold();
+	const base = (t, per = {}, extra = {}) => ({ ac: true, thr: t, hold: h, perState: per, hado: false, sho: false, ...extra });
+	const actual = { by: {} };
+	for (const at of list) { const k = `${at.target}|${at.side}`; (actual.by[k] ??= { n: 0, s: 0 }); actual.by[k].n++; actual.by[k].s += at.ok ? 1 : 0; }
+	actual.mean = list.length ? list.filter((a) => a.ok).length / list.length : 0;
+	const off = evaluate(list, null);
+	const def = evaluate(list, base(9));
+	// 1) global threshold: best success, then the highest (least aggressive) within 0.5 points
+	const byT = [];
+	for (let t = 1; t <= 16; t++) byT[t] = evaluate(list, base(t)).mean;
+	const bestT = Math.max(...byT.slice(1));
+	let T = 1;
+	for (let t = 16; t >= 1; t--) if (byT[t] >= bestT - 0.005) { T = t; break; }
+	// 2) per-direction: only directions seen as short (< hold) inputs at least 3 times
+	const shortCount = {};
+	for (const at of list) {
+		const r = isolate(at.raw, at.start).filter((c) => c.t <= at.button);
+		for (let i = 1; i < r.length - 1; i++) if (r[i].s && r[i + 1].t - r[i].t < h) shortCount[r[i].s] = (shortCount[r[i].s] || 0) + 1;
+	}
+	const per = {};
+	let cur = evaluate(list, base(T)).mean;
+	for (const st of [D|R, D|L, U|R, U|L, D, R, L].filter((x) => (shortCount[x] || 0) >= 3)) {
+		const means = [];
+		for (let v = 1; v <= 16; v++) means[v] = evaluate(list, base(T, { ...per, [st]: v })).mean;
+		const mx = Math.max(...means.slice(1));
+		let pick = T;
+		for (let v = 16; v >= 1; v--) if (means[v] >= mx - 0.005) { pick = v; break; }
+		if (pick !== T && means[pick] >= cur - 0.001) { per[st] = pick; cur = means[pick]; }
+	}
+	const rec = evaluate(list, base(T, per));
+	// 3) assists: suggested only when they clearly help (+3 points)
+	const hadoGain = evaluate(list, base(T, per, { hado: true })).mean - rec.mean;
+	const shoGain = evaluate(list, base(T, per, { sho: true })).mean - rec.mean;
+	return { n: list.length, actual, off, def, rec, T, per, hadoGain, shoGain };
+}
+function applyRecommendation() {
+	const r = session.result;
+	thrEl.value = r.T; thrEl.oninput();
+	perDirEl.checked = Object.keys(r.per).length > 0;
+	syncPerDir();
+	for (const el of dirInputs) if (r.per[+el.dataset.s]) el.value = r.per[+el.dataset.s];
+	readPerDir();
+	document.getElementById('perDirBox').open = perDirEl.checked;
+	acLiveEl.checked = true; resetAcLive();
+	scheduleRender();
+}
+
+function renderSession() {
+	const box = document.getElementById('session');
+	if (session.state === 'idle') {
+		box.innerHTML = `<div class="big">おまかせ診断</div>
+			<div class="muted">お題の技を決まった回数だけ出すと、結果を集計して最適なACの設定を提案します。<b>本体のACはOFF</b>にして行ってください。</div>
+			<div class="row" style="margin-top:8px">${Object.entries(TARGETS).map(([k, t]) => `<label><input type="checkbox" data-pick="${k}" ${session.picks.includes(k) ? 'checked' : ''}> ${t.label}</label>`).join('')}</div>
+			<div class="row"><span class="muted">各</span><input type="number" id="sessN" min="3" max="50" value="${session.n}"><span class="muted">回</span>
+			<label><input type="checkbox" id="sessBoth" ${session.both ? 'checked' : ''}> 1P側と2P側の両方</label>
+			<button class="primary" id="sessStart">診断を始める</button></div>`;
+		box.querySelectorAll('[data-pick]').forEach((el) => (el.onchange = () => { session.picks = [...box.querySelectorAll('[data-pick]:checked')].map((e) => e.dataset.pick); }));
+		box.querySelector('#sessN').oninput = (e) => (session.n = Math.min(50, Math.max(3, +e.target.value || 10)));
+		box.querySelector('#sessBoth').onchange = (e) => (session.both = e.target.checked);
+		box.querySelector('#sessStart').onclick = () => { sessionStart(); scheduleRender(); };
+		return;
+	}
+	if (session.state === 'running') {
+		const st = session.plan[session.step];
+		const total = session.plan.length * session.n, doneAll = session.step * session.n + st.done;
+		box.innerHTML = `<div class="muted">おまかせ診断　ステップ ${session.step + 1} / ${session.plan.length}</div>
+			<div class="prompt">${sideName(st.side)}で <span style="color:var(--accent)">${TARGETS[st.target].label}</span> を出す</div>
+			<div class="muted">あと ${session.n - st.done} 回。技の最中に押したボタンは数えません。</div>
+			<div class="progress"><i style="width:${(doneAll / total) * 100}%"></i></div>
+			<div class="row"><span class="${session.msg.startsWith('×') ? 'bad' : 'ok'}">${session.msg}</span></div>
+			<div class="row"><button id="sessSkip">このステップを飛ばす</button><button id="sessStop">中止</button></div>`;
+		box.querySelector('#sessSkip').onclick = () => sessionNext();
+		box.querySelector('#sessStop').onclick = () => { session.state = 'idle'; scheduleRender(); };
+		return;
+	}
+	if (session.state === 'computing') { box.innerHTML = '<div class="big">集計中…</div><div class="muted">しきい値1〜16msと方向ごとの値を総当たりで試しています。</div>'; return; }
+	const r = session.result;
+	const again = () => { session.state = 'idle'; scheduleRender(); };
+	if (!r || !r.n) { box.innerHTML = '<div class="big">有効な試行がありませんでした</div><button id="sessAgain">もう一度</button>'; box.querySelector('#sessAgain').onclick = again; return; }
+	const rows = session.plan.map((p) => {
+		const key = `${p.target}|${p.side}`, f = (e) => (e.by[key] ? e.by[key].s / e.by[key].n : null);
+		const cell = (x) => (x === null ? '<td>-</td>' : `<td class="${clsOk(x)}">${pct(x)}</td>`);
+		return `<tr><td class="l">${TARGETS[p.target].label}</td><td class="l">${p.side}P</td>${cell(f(r.actual))}${cell(f(r.off))}${cell(f(r.def))}${cell(f(r.rec))}</tr>`;
+	}).join('');
+	const perTxt = Object.entries(r.per).map(([st, v]) => `${ARROW[st]} ${v}ms`).join(' / ');
+	const assist = [];
+	if (r.hadoGain >= 0.03) assist.push(`波動拳支援をONにすると、さらに +${Math.round(r.hadoGain * 100)}ポイント（前歩きが約1F遅れる副作用あり）`);
+	if (r.shoGain >= 0.03) assist.push(`昇竜拳支援をONにすると、さらに +${Math.round(r.shoGain * 100)}ポイント（6→3が約1F遅れる副作用あり）`);
+	const cellAll = (x) => `<td class="${clsOk(x)}">${pct(x)}</td>`;
+	box.innerHTML = `<div class="big">診断結果（${r.n} 回）</div>
+		<div style="margin:6px 0">推奨しきい値: <b class="big" style="color:var(--accent)">${r.T}ms</b>${perTxt ? `<br>方向ごと（詳細設定）: <b>${perTxt}</b>` : '<br><span class="muted">方向ごとの調整は不要です（詳細設定はOFFのままで最適）。</span>'}</div>
+		<table style="margin:6px 0"><thead><tr><th class="l">お題</th><th class="l">側</th><th>実際に出た</th><th>理論値 AC OFF</th><th>AC 初期値（9ms）</th><th>推奨設定</th></tr></thead><tbody>${rows}
+		<tr><td class="l"><b>全体</b></td><td></td>${cellAll(r.actual.mean)}${cellAll(r.off.mean)}${cellAll(r.def.mean)}<td class="${clsOk(r.rec.mean)}"><b>${pct(r.rec.mean)}</b></td></tr></tbody></table>
+		${assist.length ? `<div class="muted">${assist.join('<br>')}</div>` : '<div class="muted">波動拳支援・昇竜拳支援は、この結果では効果が小さいのでOFFのままを推奨します。</div>'}
+		<div class="muted" style="margin-top:6px">理論値は、同じ入力を読み取りタイミング32通りで再生した平均です。成功率が同じなら、なるべく大きいしきい値を選んでいます（小さい値ほど誤入力も保持するため）。保持時間は現在の値（${hold()}ms）で計算しています。</div>
+		<div class="row" style="margin-top:8px"><button class="primary" id="sessApply">推奨値でACプレビューを試す</button><button id="sessAgain">もう一度診断する</button></div>
+		<div class="muted">「推奨値でACプレビューを試す」を押すと、推奨値のACをONにした状態でトレーニングを続けられます。本体に反映するには、Web設定画面の「しきい値」${perTxt ? 'と「詳細設定」' : ''}に同じ値を入れて保存してください。</div>`;
+	box.querySelector('#sessApply').onclick = applyRecommendation;
+	box.querySelector('#sessAgain').onclick = again;
+}
 function renderHistory() {
 	const list = segs.map((s, i) => ({ ...s, i, prev: segs[i - 1]?.state ?? 0, next: segs[i + 1]?.state ?? cur.state })).filter((s) => s.state !== 0);
 	const rows = [];
@@ -709,178 +1057,27 @@ function renderStats(list) {
 	document.getElementById('suggest').innerHTML = html;
 }
 
-function render() { renderPending = false; renderHistory(); renderCommands(); renderSession(); }
-
-// ============================================================================
-// Diagnosis session: guided attempts → recommended settings
-// ============================================================================
-const session = { state: 'idle', plan: [], step: 0, msg: '', result: null, picks: Object.keys(MODES), n: 10, both: true };
-function sessionStart() {
-	session.plan = [];
-	for (const k of session.picks) for (const sd of session.both ? [1, 2] : [1]) session.plan.push({ mode: k, side: sd, done: 0 });
-	if (!session.plan.length) return;
-	session.state = 'running'; session.step = 0; session.msg = ''; session.result = null; session.id = Date.now();
-	deviceAcEl.checked = false;
-	setMode(session.plan[0].mode);
-}
-function setMode(k) { mode = k; renderModes(); scheduleRender(); }
-function sessionOnAttempt(at) {
-	if (session.state !== 'running') return;
-	const st = session.plan[session.step];
-	if (at.mode !== st.mode) return;
-	if (at.ignored) { session.msg = `前回の入力は除外しました（${at.ignored}）。`; return; }
-	const j = judge(at.raw, at);
-	if (j.side !== st.side) { at.ignored = '向きが違う'; session.msg = `前回の入力は${sideName(j.side)}として判定されました。${sideName(st.side)}で入力してください。`; return; }
-	at.session = session.id;
-	st.done++;
-	session.msg = `前回: 成功率 ${pct(j.rate)}`;
-	if (st.done >= session.n) sessionNext();
-}
-function sessionNext() {
-	session.step++;
-	session.msg = '';
-	if (session.step < session.plan.length) { setMode(session.plan[session.step].mode); return; }
-	session.state = 'computing';
-	scheduleRender();
-	setTimeout(() => { session.result = recommend(attempts.filter((a) => a.session === session.id && !a.ignored)); session.state = 'done'; scheduleRender(); }, 50);
-}
-
-// Mean success of the session attempts under one AC configuration (null = AC off).
-function evaluate(list, cfg) {
-	const by = {};
-	let sum = 0;
-	for (const at of list) {
-		const lo = at.start - 50, hi = at.button + 20;
-		const src = isolate(at.raw, at.start).filter((c) => c.t <= hi);
-		const r = cfg ? judgeSideFixed(applyAC(src.filter((c, i) => i === 0 || c.t >= lo), cfg), at) : judgeSideFixed(src, at);
-		sum += r;
-		const key = `${at.mode}|${at.sideFixed}`;
-		(by[key] ??= { n: 0, s: 0 }); by[key].n++; by[key].s += r;
-	}
-	return { mean: list.length ? sum / list.length : 0, by };
-}
-// Judge with the side fixed to the one the session asked for.
-function judgeSideFixed(list, at) {
-	const m = MODES[at.mode];
-	return judgeSide(isolate(list, at.start), at, m, winByMode[at.mode], at.sideFixed).rate;
-}
-function recommend(list) {
-	list.forEach((at) => (at.sideFixed = judge(at.raw, at).side));
-	const h = hold();
-	const base = (t, per = {}, extra = {}) => ({ ac: true, thr: t, hold: h, perState: per, hado: false, sho: false, ...extra });
-	const off = evaluate(list, null);
-	const def = evaluate(list, base(9));
-	// 1) global threshold: best success, then the highest (least aggressive) threshold within 0.5 points
-	const byT = [];
-	for (let t = 1; t <= 16; t++) byT[t] = evaluate(list, base(t)).mean;
-	const bestT = Math.max(...byT.slice(1));
-	let T = 1;
-	for (let t = 16; t >= 1; t--) if (byT[t] >= bestT - 0.005) { T = t; break; }
-	// 2) per-direction refinement — only for directions that actually showed
-	//    up as short (< hold) inputs at least 3 times in this session; a value
-	//    for a direction with no data would be a guess.
-	const shortCount = {};
-	for (const at of list) {
-		const r = isolate(at.raw, at.start).filter((c) => c.t <= at.button);
-		for (let i = 1; i < r.length - 1; i++) if (r[i].s && r[i + 1].t - r[i].t < h) shortCount[r[i].s] = (shortCount[r[i].s] || 0) + 1;
-	}
-	const per = {};
-	let cur = evaluate(list, base(T)).mean;
-	for (const st of [D|R, D|L, U|R, U|L, D, R, L].filter((x) => (shortCount[x] || 0) >= 3)) {
-		const means = [];
-		for (let v = 1; v <= 16; v++) means[v] = evaluate(list, base(T, { ...per, [st]: v })).mean;
-		const mx = Math.max(...means.slice(1));
-		let pick = T;
-		for (let v = 16; v >= 1; v--) if (means[v] >= mx - 0.005) { pick = v; break; }
-		if (pick !== T && means[pick] >= cur - 0.001) { per[st] = pick; cur = means[pick]; }
-	}
-	const rec = evaluate(list, base(T, per));
-	// 3) assists: only suggested when they clearly help (+3 points)
-	const hadoGain = evaluate(list, base(T, per, { hado: true })).mean - rec.mean;
-	const shoGain = evaluate(list, base(T, per, { sho: true })).mean - rec.mean;
-	return { n: list.length, off, def, rec, T, per, hadoGain, shoGain, byT };
-}
-function applyRecommendation() {
-	const r = session.result;
-	thrEl.value = r.T; thrEl.oninput();
-	perDirEl.checked = Object.keys(r.per).length > 0;
-	syncPerDir();
-	for (const el of dirInputs) if (r.per[+el.dataset.s]) el.value = r.per[+el.dataset.s];
-	readPerDir();
-	document.getElementById('perDirBox').open = perDirEl.checked;
-	scheduleRender();
-}
-
-function renderSession() {
-	const box = document.getElementById('session');
-	if (session.state === 'idle') {
-		box.innerHTML = `<div class="big">おまかせ診断</div>
-			<div class="muted">決まった回数だけコマンドを入力すると、結果を集計して最適なACの設定を提案します。<b>本体のACはOFF</b>にして行ってください。</div>
-			<div class="row" style="margin-top:8px">${Object.entries(MODES).map(([k, m]) => `<label><input type="checkbox" data-pick="${k}" ${session.picks.includes(k) ? 'checked' : ''}> ${m.label}</label>`).join('')}</div>
-			<div class="row"><span class="muted">各</span><input type="number" id="sessN" min="3" max="50" value="${session.n}"><span class="muted">回</span>
-			<label><input type="checkbox" id="sessBoth" ${session.both ? 'checked' : ''}> 1P側と2P側の両方</label>
-			<button class="primary" id="sessStart">診断を始める</button></div>`;
-		box.querySelectorAll('[data-pick]').forEach((el) => (el.onchange = () => { session.picks = [...box.querySelectorAll('[data-pick]:checked')].map((e) => e.dataset.pick); }));
-		box.querySelector('#sessN').oninput = (e) => (session.n = Math.min(50, Math.max(3, +e.target.value || 10)));
-		box.querySelector('#sessBoth').onchange = (e) => (session.both = e.target.checked);
-		box.querySelector('#sessStart').onclick = () => { sessionStart(); scheduleRender(); };
-		return;
-	}
-	if (session.state === 'running') {
-		const st = session.plan[session.step];
-		const total = session.plan.length * session.n, doneAll = session.plan.slice(0, session.step).length * session.n + st.done;
-		box.innerHTML = `<div class="muted">おまかせ診断　ステップ ${session.step + 1} / ${session.plan.length}</div>
-			<div class="prompt">${sideName(st.side)}で <span style="color:var(--accent)">${MODES[st.mode].label}</span> を入力</div>
-			<div class="muted">${MODES[st.mode].help}　あと ${session.n - st.done} 回</div>
-			<div class="progress"><i style="width:${(doneAll / total) * 100}%"></i></div>
-			<div class="row"><span class="${session.msg.startsWith('前回の') ? 'warn' : 'muted'}">${session.msg}</span></div>
-			<div class="row"><button id="sessSkip">このステップを飛ばす</button><button id="sessStop">中止</button></div>`;
-		box.querySelector('#sessSkip').onclick = () => sessionNext();
-		box.querySelector('#sessStop').onclick = () => { session.state = 'idle'; scheduleRender(); };
-		return;
-	}
-	if (session.state === 'computing') { box.innerHTML = '<div class="big">集計中…</div><div class="muted">しきい値1〜16msと方向ごとの値を総当たりで試しています。</div>'; return; }
-	const r = session.result;
-	if (!r || !r.n) { box.innerHTML = '<div class="big">有効な入力がありませんでした</div><button id="sessAgain">もう一度</button>'; box.querySelector('#sessAgain').onclick = () => { session.state = 'idle'; scheduleRender(); }; return; }
-	const rows = session.plan.map((p) => {
-		const key = `${p.mode}|${p.side}`, f = (e) => (e.by[key] ? e.by[key].s / e.by[key].n : null);
-		const cell = (x) => (x === null ? '<td>-</td>' : `<td class="${clsOk(x)}">${pct(x)}</td>`);
-		return `<tr><td class="l">${MODES[p.mode].label}</td><td class="l">${p.side === 1 ? '1P' : '2P'}</td>${cell(f(r.off))}${cell(f(r.def))}${cell(f(r.rec))}</tr>`;
-	}).join('');
-	const perTxt = Object.entries(r.per).map(([st, v]) => `${ARROW[st]} ${v}ms`).join(' / ');
-	const assist = [];
-	if (r.hadoGain >= 0.03) assist.push(`波動拳支援をONにすると、さらに +${Math.round(r.hadoGain * 100)}ポイント（前歩きが約1F遅れる副作用あり）`);
-	if (r.shoGain >= 0.03) assist.push(`昇竜拳支援をONにすると、さらに +${Math.round(r.shoGain * 100)}ポイント（6→3が約1F遅れる副作用あり）`);
-	box.innerHTML = `<div class="big">診断結果（有効 ${r.n} 回）</div>
-		<div style="margin:6px 0">推奨しきい値: <b class="big" style="color:var(--accent)">${r.T}ms</b>${perTxt ? `<br>方向ごと（詳細設定）: <b>${perTxt}</b>` : '<br><span class="muted">方向ごとの調整は不要です（詳細設定はOFFのままで最適）。</span>'}</div>
-		<table style="margin:6px 0"><thead><tr><th class="l">コマンド</th><th class="l">側</th><th>AC OFF</th><th>AC 初期値（9ms）</th><th>推奨設定</th></tr></thead><tbody>${rows}
-		<tr><td class="l"><b>全体</b></td><td></td><td class="${clsOk(r.off.mean)}">${pct(r.off.mean)}</td><td class="${clsOk(r.def.mean)}">${pct(r.def.mean)}</td><td class="${clsOk(r.rec.mean)}"><b>${pct(r.rec.mean)}</b></td></tr></tbody></table>
-		${assist.length ? `<div class="muted">${assist.join('<br>')}</div>` : '<div class="muted">波動拳支援・昇竜拳支援は、この結果では効果が小さいのでOFFのままを推奨します。</div>'}
-		<div class="muted" style="margin-top:6px">成功率が同じなら、なるべく大きいしきい値を選んでいます。小さいしきい値ほど、意図しない一瞬の入力まで保持してしまうためです。保持時間は現在の値（${hold()}ms）で計算しています。</div>
-		<div class="row" style="margin-top:8px"><button class="primary" id="sessApply">推奨値をプレビューに反映</button><button id="sessAgain">もう一度診断する</button></div>
-		<div class="muted">本体に反映するには、Web設定画面の「しきい値」${perTxt ? 'と「詳細設定」' : ''}に同じ値を入れて保存してください。</div>`;
-	box.querySelector('#sessApply').onclick = applyRecommendation;
-	box.querySelector('#sessAgain').onclick = () => { session.state = 'idle'; scheduleRender(); };
-}
+function render() { renderPending = false; renderHistory(); renderAttempts(); renderSession(); }
 
 // ============================================================================
 // Misc
 // ============================================================================
 document.getElementById('btnClear').onclick = () => {
-	segs.length = 0; attempts.length = 0; changes.length = 0;
+	segs.length = 0; attempts.length = 0; changes.length = 0; game.log = [];
 	changes.push({ t: performance.now(), s: cur.state });
 	cur = { state: cur.state, start: performance.now() };
 	render();
 };
 document.getElementById('btnCsv').onclick = () => {
-	const lines = ['type,index,mode,side,sequence_or_numpad,start_ms,duration_ms,drop_rate_or_success,ac_prediction'];
+	const lines = ['type,index,target,side,sequence_or_numpad,start_ms,duration_ms,game_success_or_drop_rate,theory_ac_off,theory_ac,move'];
 	segs.forEach((s, i) => {
 		if (!s.state) return;
-		lines.push(['input', i + 1, '', '', NUMPAD[s.state], s.start.toFixed(2), s.dur.toFixed(2), dropRate(s.dur).toFixed(3), acAfter(s.dur, s.state).toFixed(3)].join(','));
+		lines.push(['input', i + 1, '', '', NUMPAD[s.state], s.start.toFixed(2), s.dur.toFixed(2), dropRate(s.dur).toFixed(3), '', acAfter(s.dur, s.state).toFixed(3), ''].join(','));
 	});
 	attempts.forEach((at, i) => {
-		const j = judged(at);
-		lines.push(['command', i + 1, at.mode, j.raw.side === 1 ? '1P' : '2P', seqOf(at.raw, at.start), at.start.toFixed(2), (at.button - at.start).toFixed(2), j.raw.rate.toFixed(3), j.ac ? j.ac.rate.toFixed(3) : ''].join(','));
+		if (at.busy) return;
+		const r = replayed(at);
+		lines.push(['attempt', i + 1, at.target, at.side + 'P', seqOf(at.raw, at.start), at.start.toFixed(2), (at.button - at.start).toFixed(2), at.ok ? 1 : 0, r.off.toFixed(3), r.ac === null ? '' : r.ac.toFixed(3), MOVES[at.move].label].join(','));
 	});
 	const a = document.createElement('a');
 	a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
@@ -904,7 +1101,10 @@ window.addEventListener('keyup', (e) => {
 	if ('jkl'.includes(k)) feedButton(false, e.timeStamp);
 });
 
+setSide(1);
+renderTargets();
 render();
+requestAnimationFrame(draw);
 </script>
 </body>
 </html>
