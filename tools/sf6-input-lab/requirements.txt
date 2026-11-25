@@ -1,0 +1,4 @@
+vgamepad
+mss
+opencv-python
+numpy
