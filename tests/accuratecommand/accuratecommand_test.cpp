@@ -97,8 +97,26 @@ static void scenarios() {
 		s.run({{D, 30000}, {D|R, 25000}, {R, 30000}});
 		CHECK(s.rel(1) == 30000 && s.rel(2) == 55000, "timing changed: %u %u", s.rel(1), s.rel(2));
 	}
-	{ // AC: neutral is never extended or dropped (dash 6,5,6 survives)
+	{ // Default (down-only): non-down directions are never held (walk/dash/jump untouched)
 		Sim s(cfg(true));
+		s.run({{0, 30000}, {R, 12000}, {0, 8000}, {R, 30000}});
+		CHECK(s.seq() == "5656", "dash got %s", s.seq().c_str());
+		CHECK(s.durOf(1) == 12000, "6 should stay 12ms, got %u", s.durOf(1));
+		Sim s2(cfg(true));
+		s2.run({{0, 30000}, {U|R, 10000}, {0, 30000}});
+		CHECK(s2.durOf(1) == 10000, "9 should stay 10ms, got %u", s2.durOf(1));
+		CHECK(s.ac.getHoldCount() == 0 && s2.ac.getHoldCount() == 0, "holdCount should be 0");
+	}
+	{ // Default (down-only): 623 with a short 2 -> the 2 is held, the 6 before it is not
+		Sim s(cfg(true));
+		s.run({{R, 10000}, {D, 10000}, {D|R, 30000}});
+		CHECK(s.seq() == "623", "got %s", s.seq().c_str());
+		CHECK(s.durOf(0) == 10000, "6 should stay 10ms, got %u", s.durOf(0));
+		CHECK(s.durOf(1) >= 18000 && s.durOf(1) <= 18100, "2 held %u", s.durOf(1));
+	}
+	{ // All-direction mode: neutral is never extended or dropped (dash 6,5,6 survives)
+		AccurateCommandConfig c = cfg(true); c.holdDownOnly = false;
+		Sim s(c);
 		s.run({{0, 30000}, {R, 12000}, {0, 8000}, {R, 30000}});
 		CHECK(s.seq() == "5656", "dash got %s", s.seq().c_str());
 		CHECK(s.durOf(1) >= 18000, "first 6 held %u", s.durOf(1));

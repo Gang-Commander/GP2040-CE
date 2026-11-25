@@ -523,6 +523,7 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.gamepadOptions, hadokenAssistEnabled, !!DEFAULT_HADOKEN_ASSIST_ENABLED);
     INIT_UNSET_PROPERTY(config.gamepadOptions, shoryukenAssistEnabled, !!DEFAULT_SHORYUKEN_ASSIST_ENABLED);
     INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandPerDirection, false);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandAllDirections, false);
     INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdUp, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
     INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdUpRight, DEFAULT_ACCURATE_COMMAND_THRESHOLD);
     INIT_UNSET_PROPERTY(config.gamepadOptions, accurateCommandThresholdRight, DEFAULT_ACCURATE_COMMAND_THRESHOLD);

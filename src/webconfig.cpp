@@ -849,6 +849,7 @@ std::string setGamepadOptions()
     readDoc(gamepadOptions.hadokenAssistEnabled, doc, "hadokenAssistEnabled");
     readDoc(gamepadOptions.shoryukenAssistEnabled, doc, "shoryukenAssistEnabled");
     readDoc(gamepadOptions.accurateCommandPerDirection, doc, "accurateCommandPerDirection");
+    readDoc(gamepadOptions.accurateCommandAllDirections, doc, "accurateCommandAllDirections");
     readDoc(gamepadOptions.accurateCommandThresholdUp, doc, "accurateCommandThresholdUp");
     readDoc(gamepadOptions.accurateCommandThresholdUpRight, doc, "accurateCommandThresholdUpRight");
     readDoc(gamepadOptions.accurateCommandThresholdRight, doc, "accurateCommandThresholdRight");
@@ -984,6 +985,7 @@ std::string getGamepadOptions()
     writeDoc(doc, "accurateCommandEnabled", gamepadOptions.accurateCommandEnabled ? 1 : 0);
     writeDoc(doc, "accurateCommandThreshold", gamepadOptions.accurateCommandThreshold);
     writeDoc(doc, "accurateCommandHoldTime", gamepadOptions.accurateCommandHoldTime);
+    writeDoc(doc, "accurateCommandAllDirections", gamepadOptions.accurateCommandAllDirections ? 1 : 0);
     writeDoc(doc, "hadokenAssistEnabled", gamepadOptions.hadokenAssistEnabled ? 1 : 0);
     writeDoc(doc, "shoryukenAssistEnabled", gamepadOptions.shoryukenAssistEnabled ? 1 : 0);
     writeDoc(doc, "accurateCommandPerDirection", gamepadOptions.accurateCommandPerDirection ? 1 : 0);

@@ -103,6 +103,7 @@
 			<h2>ACの設定（プレビュー用）</h2>
 			<div class="row"><span style="width:96px">しきい値</span><input type="range" id="thr" min="1" max="16" value="9"><b id="thrVal" style="width:44px;text-align:right">9ms</b></div>
 			<div class="row"><span style="width:96px">保持時間</span><input type="range" id="hold" min="10" max="50" value="18"><b id="holdVal" style="width:44px;text-align:right">18ms</b></div>
+			<div class="row"><span style="width:96px">保持する方向</span><select id="acAll"><option value="0">下を含む方向のみ（↓↘↙）</option><option value="1">全方向</option></select></div>
 			<details id="perDirBox">
 				<summary>詳細設定</summary>
 				<div class="row" style="margin-top:6px"><label><input type="checkbox" id="perDir"> 方向ごとにしきい値を設定する</label></div>
@@ -360,6 +361,8 @@ function buildDecoder(c) {
 class ACEngine {
 	constructor(cfg) { this.cfg = cfg; this.q = []; this.dispStart = 0; this.lastRaw = 0; this.beforeNeutral = 0; }
 	thr(state) { return this.cfg.perState?.[state] || this.cfg.thr; }
+	// Hold target: only down-containing states (2/3/1) unless cfg.all is set
+	target(state) { return state !== 0 && (this.cfg.all || (state & D) !== 0); }
 	insertion(prev, next) {
 		const c = this.cfg;
 		if (c.hado) {
@@ -375,7 +378,7 @@ class ACEngine {
 		const dur = seg.end - seg.start, lagging = this.dispStart > seg.start;
 		let minShow;
 		if (seg.s !== 0 && dur < this.thr(seg.s)) minShow = lagging ? 0 : dur;
-		else if (c.ac && seg.s !== 0) minShow = c.hold;
+		else if (c.ac && this.target(seg.s)) minShow = c.hold;
 		else minShow = Math.min(dur, c.hold);
 		return Math.max(this.dispStart + minShow, seg.end);
 	}
@@ -823,7 +826,9 @@ acLiveEl.onchange = () => { resetAcLive(); };
 // ============================================================================
 const thrEl = document.getElementById('thr'), holdEl = document.getElementById('hold');
 const deviceAcEl = document.getElementById('deviceAc'), perDirEl = document.getElementById('perDir');
-const thr = () => +thrEl.value, hold = () => +holdEl.value;
+const acAllEl = document.getElementById('acAll');
+const thr = () => +thrEl.value, hold = () => +holdEl.value, allDirs = () => acAllEl.value === '1';
+const isTarget = (s) => s !== 0 && (allDirs() || (s & D) !== 0);
 const NUMPAD_ORDER = [U|L, U, U|R, L, 0, R, D|L, D, D|R];
 const perState = {};
 document.getElementById('numpad').innerHTML = NUMPAD_ORDER.map((s) => s === 0
@@ -831,7 +836,7 @@ document.getElementById('numpad').innerHTML = NUMPAD_ORDER.map((s) => s === 0
 	: `<div><label>${ARROW[s]} ${NUMPAD[s]}</label><input type="number" min="1" max="16" data-s="${s}" disabled></div>`).join('');
 const dirInputs = [...document.querySelectorAll('#numpad input')];
 function syncPerDir() {
-	dirInputs.forEach((el) => { el.disabled = !perDirEl.checked; if (!perDirEl.checked) el.value = thr(); });
+	dirInputs.forEach((el) => { el.disabled = !perDirEl.checked || !isTarget(+el.dataset.s); if (!perDirEl.checked) el.value = thr(); });
 	readPerDir();
 }
 function readPerDir() {
@@ -842,9 +847,10 @@ dirInputs.forEach((el) => (el.oninput = () => { readPerDir(); resetAcLive(); sch
 thrEl.oninput = () => { document.getElementById('thrVal').textContent = thr() + 'ms'; if (!perDirEl.checked) syncPerDir(); resetAcLive(); scheduleRender(); };
 holdEl.oninput = () => { document.getElementById('holdVal').textContent = hold() + 'ms'; resetAcLive(); scheduleRender(); };
 deviceAcEl.onchange = scheduleRender;
+acAllEl.onchange = () => { syncPerDir(); resetAcLive(); scheduleRender(); };
 syncPerDir();
 const thrFor = (s) => perState[s] || thr();
-const acCfg = () => ({ ac: true, thr: thr(), hold: hold(), perState: { ...perState }, hado: false, sho: false });
+const acCfg = () => ({ ac: true, all: allDirs(), thr: thr(), hold: hold(), perState: { ...perState }, hado: false, sho: false });
 // ============================================================================
 // Rendering
 // ============================================================================
@@ -889,7 +895,7 @@ function shapeOf(raw) {
 // ---- Attempt table & per-target stats ---------------------------------------
 const replayCache = new WeakMap();
 function replayed(at) {
-	const key = `${thr()}|${hold()}|${JSON.stringify(perState)}|${JSON.stringify(winByMove)}|${deviceAcEl.checked}`;
+	const key = `${thr()}|${hold()}|${allDirs()}|${JSON.stringify(perState)}|${JSON.stringify(winByMove)}|${deviceAcEl.checked}`;
 	const c = replayCache.get(at);
 	if (c && c.key === key) return c.v;
 	const v = { off: replayRate(at, null), ac: deviceAcEl.checked ? null : replayRate(at, acCfg()) };
@@ -975,7 +981,8 @@ function evaluate(list, cfg) {
 }
 function recommend(list) {
 	const h = hold();
-	let base = (t, per = {}, extra = {}) => ({ ac: true, thr: t, hold: h, perState: per, hado: false, sho: false, ...extra });
+	const all = allDirs();
+	let base = (t, per = {}, extra = {}) => ({ ac: true, all, thr: t, hold: h, perState: per, hado: false, sho: false, ...extra });
 	const actual = { by: {} };
 	for (const at of list) { const k = `${at.target}|${at.side}`; (actual.by[k] ??= { n: 0, s: 0 }); actual.by[k].n++; actual.by[k].s += at.ok ? 1 : 0; }
 	actual.mean = list.length ? list.filter((a) => a.ok).length / list.length : 0;
@@ -996,7 +1003,7 @@ function recommend(list) {
 	const byHold = Object.fromEntries(HOLDS.map((hh) => [hh, Math.max(...[...Array(16).keys()].map((i) => grid[`${hh}|${i + 1}`]))]));
 	let T = 1;
 	for (let t = 16; t >= 1; t--) if (grid[`${H}|${t}`] >= best - 0.005) { T = t; break; }
-	base = (t, per = {}, extra = {}) => ({ ac: true, thr: t, hold: H, perState: per, hado: false, sho: false, ...extra });
+	base = (t, per = {}, extra = {}) => ({ ac: true, all, thr: t, hold: H, perState: per, hado: false, sho: false, ...extra });
 	// 2) per-direction: only directions seen as short (< hold) inputs at least 3 times
 	const shortCount = {};
 	for (const at of list) {
@@ -1005,7 +1012,8 @@ function recommend(list) {
 	}
 	const per = {};
 	let cur = evaluate(list, base(T)).mean;
-	for (const st of [D|R, D|L, U|R, U|L, D, R, L].filter((x) => (shortCount[x] || 0) >= 3)) {
+	// (in down-only mode the other directions are never held, so their thresholds don't matter)
+	for (const st of [D|R, D|L, U|R, U|L, D, R, L].filter((x) => isTarget(x) && (shortCount[x] || 0) >= 3)) {
 		const means = [];
 		for (let v = 1; v <= 16; v++) means[v] = evaluate(list, base(T, { ...per, [st]: v })).mean;
 		const mx = Math.max(...means.slice(1));
@@ -1071,15 +1079,15 @@ function renderSession() {
 	}).join('');
 	const perTxt = Object.entries(r.per).map(([st, v]) => `${ARROW[st]} ${v}ms`).join(' / ');
 	const assist = [];
-	if (r.hadoGain >= 0.03) assist.push(`波動拳支援をONにすると、さらに +${Math.round(r.hadoGain * 100)}ポイント（前歩きが約1F遅れる副作用あり）`);
-	if (r.shoGain >= 0.03) assist.push(`昇竜拳支援をONにすると、さらに +${Math.round(r.shoGain * 100)}ポイント（6→3が約1F遅れる副作用あり）`);
+	if (r.hadoGain >= 0.03) assist.push(`（参考・ACとは別機能）入力補完の波動拳支援をONにすると、さらに +${Math.round(r.hadoGain * 100)}ポイント（前歩きが約1F遅れる副作用あり）`);
+	if (r.shoGain >= 0.03) assist.push(`（参考・ACとは別機能）入力補完の昇竜拳支援をONにすると、さらに +${Math.round(r.shoGain * 100)}ポイント（6→3が約1F遅れる副作用あり）`);
 	const cellAll = (x) => `<td class="${clsOk(x)}">${pct(x)}</td>`;
 	box.innerHTML = `<div class="big">診断結果（${r.n} 回）</div>
 		<div style="margin:6px 0">推奨しきい値: <b class="big" style="color:var(--accent)">${r.T}ms</b>　推奨保持時間: <b class="big" style="color:var(--accent)">${r.H}ms</b>
 		<br><span class="muted">保持時間ごとの最高値: ${Object.entries(r.byHold).map(([k, v]) => `${k}ms → ${pct(v)}`).join(' / ')}。長い保持ほど届きやすい代わりに、次の方向が最大でその分遅れます。</span>${perTxt ? `<br>方向ごと（詳細設定）: <b>${perTxt}</b>` : '<br><span class="muted">方向ごとの調整は不要です（詳細設定はOFFのままで最適）。</span>'}</div>
 		<table style="margin:6px 0"><thead><tr><th class="l">お題</th><th class="l">側</th><th>実際に出た</th><th>理論値 AC OFF</th><th>AC 初期値（9ms）</th><th>推奨設定</th></tr></thead><tbody>${rows}
 		<tr><td class="l"><b>全体</b></td><td></td>${cellAll(r.actual.mean)}${cellAll(r.off.mean)}${cellAll(r.def.mean)}<td class="${clsOk(r.rec.mean)}"><b>${pct(r.rec.mean)}</b></td></tr></tbody></table>
-		${assist.length ? `<div class="muted">${assist.join('<br>')}</div>` : '<div class="muted">波動拳支援・昇竜拳支援は、この結果では効果が小さいのでOFFのままを推奨します。</div>'}
+		${assist.length ? `<div class="muted">${assist.join('<br>')}</div>` : '<div class="muted">入力補完（波動拳支援・昇竜拳支援）はACとは別機能で、入力していない方向を生成します。この結果では効果が小さいので、OFFのままを推奨します。</div>'}
 		<div class="muted" style="margin-top:6px">理論値は、同じ入力を読み取りタイミング48通りで再生した平均です。成功率がほぼ同じなら、短い保持時間と大きいしきい値を優先しています（長い保持は次の入力を遅らせ、小さいしきい値は誤入力も保持するため）。</div>
 		<div class="row" style="margin-top:8px"><button class="primary" id="sessApply">推奨値でACプレビューを試す</button><button id="sessAgain">もう一度診断する</button></div>
 		<div class="muted">「推奨値でACプレビューを試す」を押すと、推奨値のACをONにした状態でトレーニングを続けられます。本体に反映するには、Web設定画面の「しきい値」「保持時間」${perTxt ? '「詳細設定」' : ''}に同じ値を入れて保存してください。</div>`;

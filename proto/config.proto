@@ -114,6 +114,9 @@ message GamepadOptions
     optional uint32 accurateCommandThresholdDownLeft = 81;
     optional uint32 accurateCommandThresholdLeft = 82;
     optional uint32 accurateCommandThresholdUpLeft = 83;
+
+    // false (default) = hold only states containing down (2/3/1); true = every non-neutral state.
+    optional bool accurateCommandAllDirections = 84;
 }
 
 message KeyboardMapping

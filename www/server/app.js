@@ -497,6 +497,7 @@ app.get('/api/getGamepadOptions', (req, res) => {
 		accurateCommandEnabled: 1,
 		accurateCommandThreshold: 9,
 		accurateCommandHoldTime: 18,
+		accurateCommandAllDirections: 0,
 		hadokenAssistEnabled: 0,
 		shoryukenAssistEnabled: 0,
 		accurateCommandPerDirection: 0,

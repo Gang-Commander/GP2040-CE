@@ -506,6 +506,7 @@ void Gamepad::configureAccurateCommand() {
 		cfg.thresholdUs = options.accurateCommandThreshold * 1000;
 	}
 	cfg.holdUs = options.accurateCommandHoldTime * 1000;
+	cfg.holdDownOnly = !options.accurateCommandAllDirections;
 	cfg.hadokenAssist = options.hadokenAssistEnabled;
 	cfg.shoryukenAssist = options.shoryukenAssistEnabled;
 	// Advanced per-direction thresholds take precedence over the global /

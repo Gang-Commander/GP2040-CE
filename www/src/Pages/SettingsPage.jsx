@@ -1040,6 +1040,7 @@ const schema = yup.object().shape({
 	accurateCommandThresholdDownLeft: yup.number().min(1).max(16).label('Threshold DownLeft'),
 	accurateCommandThresholdLeft: yup.number().min(1).max(16).label('Threshold Left'),
 	accurateCommandThresholdUpLeft: yup.number().min(1).max(16).label('Threshold UpLeft'),
+	accurateCommandAllDirections: yup.number().label('Hold target'),
 	hadokenAssistEnabled: yup.number().label('Hadoken Assist'),
 	shoryukenAssistEnabled: yup.number().label('Shoryuken Assist'),
 	miniMenuGamepadInput: yup.number().required().label('Mini Menu'),
@@ -1137,6 +1138,7 @@ const FormContext = ({ setButtonLabels, setKeyMappings }) => {
 			'accurateCommandEnabled',
 			'accurateCommandThreshold',
 			'accurateCommandHoldTime',
+			'accurateCommandAllDirections',
 			'hadokenAssistEnabled',
 			'shoryukenAssistEnabled',
 			'accurateCommandPerDirection',
@@ -3279,6 +3281,33 @@ export default function SettingsPage() {
 																{errors.accurateCommandHoldTime}
 															</Form.Control.Feedback>
 														</Col>
+														<Col sm={4}>
+															<Form.Label>
+																{t('SettingsPage:accurate-command-target-label')}
+															</Form.Label>
+															<Form.Select
+																name="accurateCommandAllDirections"
+																className="form-select-sm"
+																value={values.accurateCommandAllDirections ? 1 : 0}
+																disabled={!values.accurateCommandEnabled}
+																onChange={(e) =>
+																	setFieldValue(
+																		'accurateCommandAllDirections',
+																		parseInt(e.target.value),
+																	)
+																}
+															>
+																<option value={0}>
+																	{t('SettingsPage:accurate-command-target-down')}
+																</option>
+																<option value={1}>
+																	{t('SettingsPage:accurate-command-target-all')}
+																</option>
+															</Form.Select>
+															<Form.Text muted>
+																{t('SettingsPage:accurate-command-target-help')}
+															</Form.Text>
+														</Col>
 													</Form.Group>
 													{/* Advanced: per-direction thresholds, laid out like a numpad */}
 													<Form.Group className="row mb-3">
@@ -3336,6 +3365,7 @@ export default function SettingsPage() {
 																	<Form.Control
 																		type="number"
 																		name="accurateCommandThresholdUpLeft"
+																		disabled={!values.accurateCommandAllDirections}
 																		className="form-control-sm"
 																		value={values.accurateCommandThresholdUpLeft}
 																		isInvalid={errors.accurateCommandThresholdUpLeft}
@@ -3349,6 +3379,7 @@ export default function SettingsPage() {
 																	<Form.Control
 																		type="number"
 																		name="accurateCommandThresholdUp"
+																		disabled={!values.accurateCommandAllDirections}
 																		className="form-control-sm"
 																		value={values.accurateCommandThresholdUp}
 																		isInvalid={errors.accurateCommandThresholdUp}
@@ -3362,6 +3393,7 @@ export default function SettingsPage() {
 																	<Form.Control
 																		type="number"
 																		name="accurateCommandThresholdUpRight"
+																		disabled={!values.accurateCommandAllDirections}
 																		className="form-control-sm"
 																		value={values.accurateCommandThresholdUpRight}
 																		isInvalid={errors.accurateCommandThresholdUpRight}
@@ -3375,6 +3407,7 @@ export default function SettingsPage() {
 																	<Form.Control
 																		type="number"
 																		name="accurateCommandThresholdLeft"
+																		disabled={!values.accurateCommandAllDirections}
 																		className="form-control-sm"
 																		value={values.accurateCommandThresholdLeft}
 																		isInvalid={errors.accurateCommandThresholdLeft}
@@ -3389,6 +3422,7 @@ export default function SettingsPage() {
 																	<Form.Control
 																		type="number"
 																		name="accurateCommandThresholdRight"
+																		disabled={!values.accurateCommandAllDirections}
 																		className="form-control-sm"
 																		value={values.accurateCommandThresholdRight}
 																		isInvalid={errors.accurateCommandThresholdRight}
@@ -3439,6 +3473,17 @@ export default function SettingsPage() {
 																	</div>
 																)}
 															</details>
+														</Col>
+													</Form.Group>
+													{/* Input completion: a separate feature from AC. It DOES generate inputs. */}
+													<Form.Group className="row mb-2 mt-4">
+														<Form.Label>
+															{t('SettingsPage:input-completion-header')}
+														</Form.Label>
+														<Col sm={12}>
+															<Form.Text muted>
+																{t('SettingsPage:input-completion-description')}
+															</Form.Text>
 														</Col>
 													</Form.Group>
 													<Form.Group className="row mb-3">

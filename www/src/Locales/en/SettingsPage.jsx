@@ -85,11 +85,19 @@ export default {
 		'1-16 ms, default 9. Recommended 6-12. Lower = more diagonals saved, but more accidental inputs are held too.',
 	'accurate-command-hold-label': 'Hold Time (ms)',
 	'accurate-command-hold-help':
-		"10-50 ms, default 18 (one 60fps frame + 1 ms USB poll). SF6 reads input 3 times per frame at irregular moments, so only about 34 ms guarantees delivery in the strictest case, but attack buttons are not delayed: too long a hold can make the button arrive before the next direction. Use the tester's diagnosis to choose. Also used as the length of assist inserts.",
+		"10-50 ms, default 18 (one 60fps frame + 1 ms USB poll). SF6 reads input 3 times per frame at irregular moments, so only about 34 ms guarantees delivery in the strictest case, but attack buttons are not delayed: too long a hold can make the button arrive before the next direction. Use the tester's diagnosis to choose. Also used as the length of input-completion inserts.",
+	'accurate-command-target-label': 'Hold target',
+	'accurate-command-target-down': 'Down-containing only (↓↘↙)',
+	'accurate-command-target-all': 'All directions',
+	'accurate-command-target-help':
+		'Default: only states containing down are held, since motion commands depend on them. Other directions (walk, dash, jump) always pass through with their real length. AC never creates an input; it only keeps a real one visible long enough to be read.',
 	'accurate-command-advanced-label': 'Advanced settings',
 	'accurate-command-per-direction-label': 'Set the threshold per direction',
 	'accurate-command-per-direction-help':
-		'Off: every direction uses the threshold above. On: each of the 8 directions (ms, 1-16) uses its own value and overrides the profile threshold. Starts from the current threshold.',
+		'Off: every direction uses the threshold above. On: each of the 8 directions (ms, 1-16) uses its own value and overrides the profile threshold. Starts from the current threshold. With "Down-containing only", only ↓↘↙ can be edited.',
+	'input-completion-header': 'Input Completion (separate from Accurate Command)',
+	'input-completion-description':
+		'Unlike Accurate Command, these features GENERATE directions you did not input. They work even with Accurate Command turned off.',
 	'hadoken-assist-label': 'Hadoken Assist (236/214)',
 	'hadoken-assist-help':
 		'Inserts the down-diagonal for one frame on a direct 2→6, 2→4, 6→2 or 4→2. The following direction is delayed by about 1 frame.',

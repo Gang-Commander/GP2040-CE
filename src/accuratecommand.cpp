@@ -80,12 +80,12 @@ void AccurateCommand::computeDisplayEnd(Segment& seg, uint32_t& dispEnd) {
 		// Sub-threshold direction = noise. Pass through as-is when live,
 		// drop it when we are behind (it would only add more lag).
 		minShow = lagging ? 0 : dur;
-	} else if (config.acEnabled && seg.state != 0) {
-		// Valid direction: guarantee one full frame on the wire.
+	} else if (config.acEnabled && isHoldTarget(seg.state)) {
+		// Valid hold-target direction: guarantee one full frame on the wire.
 		minShow = config.holdUs;
 	} else {
-		// Neutral (never extended, never dropped: it separates dashes etc.)
-		// or AC off: keep the original duration, capped so a long
+		// Neutral (never extended, never dropped: it separates dashes etc.),
+		// a non-target direction, or AC off: keep the original duration, capped so a long
 		// segment can absorb the backlog.
 		minShow = dur < config.holdUs ? dur : config.holdUs;
 	}
@@ -120,7 +120,7 @@ uint8_t AccurateCommand::process(uint8_t dpad, uint32_t nowUs) {
 		live.end = nowUs;
 		const uint32_t dur = nowUs - live.start;
 
-		if (config.acEnabled && prev != 0 &&
+		if (config.acEnabled && isHoldTarget(prev) &&
 		    dur >= thresholdFor(prev) && dur < config.holdUs)
 			holdCount++;
 
