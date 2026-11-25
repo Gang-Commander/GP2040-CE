@@ -58,7 +58,8 @@ export default {
 	'accurate-command-threshold-label': "しきい値（ミリ秒）",
 	'accurate-command-threshold-help': "1〜16ms、初期値9。推奨6〜12。小さいほど斜めを拾いやすいが、誤入力も保持されやすくなります。",
 	'accurate-command-hold-label': "保持時間（ミリ秒）",
-	'accurate-command-hold-help': "10〜50ms、初期値18（60fpsの1フレーム＋USBポーリング1ms）。支援モードの差し込み長にも使います。",
+	'accurate-command-hold-help':
+		"10〜50ms、初期値18（60fpsの1フレーム＋USBポーリング1ms）。スト6は1フレームに3回、不規則に入力を読むため、最も厳しい想定で確実に届くのは約34msです。ただし攻撃ボタンは遅れないので、長すぎると次の方向より先にボタンが届き、かえって技が出にくくなります。テスターのおまかせ診断で決めるのがおすすめです。支援モードの差し込み長にも使います。",
 	'accurate-command-advanced-label': "詳細設定",
 	'accurate-command-per-direction-label': "方向ごとにしきい値を設定する",
 	'accurate-command-per-direction-help': "OFF: すべての方向で上のしきい値を使います。ON: 8方向それぞれの値（1〜16ms）を使い、プロファイルのしきい値より優先します。ONにした時点の値は上のしきい値と同じです。",

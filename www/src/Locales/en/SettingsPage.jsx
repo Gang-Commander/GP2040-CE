@@ -85,7 +85,7 @@ export default {
 		'1-16 ms, default 9. Recommended 6-12. Lower = more diagonals saved, but more accidental inputs are held too.',
 	'accurate-command-hold-label': 'Hold Time (ms)',
 	'accurate-command-hold-help':
-		'10-50 ms, default 18 (one 60fps frame + 1 ms USB poll). Also used as the length of assist inserts.',
+		"10-50 ms, default 18 (one 60fps frame + 1 ms USB poll). SF6 reads input 3 times per frame at irregular moments, so only about 34 ms guarantees delivery in the strictest case, but attack buttons are not delayed: too long a hold can make the button arrive before the next direction. Use the tester's diagnosis to choose. Also used as the length of assist inserts.",
 	'accurate-command-advanced-label': 'Advanced settings',
 	'accurate-command-per-direction-label': 'Set the threshold per direction',
 	'accurate-command-per-direction-help':
